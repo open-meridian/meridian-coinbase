@@ -19,9 +19,11 @@ because there is nothing to record into yet. The plan is meridian-design's
   for byte, in meridian-kraken.
 - `src/coinbase/assets.py`: products to assets. A product is a market, not an
   asset: the base token is a row's subject (CAIP-19 for native coins by
-  SLIP-44, for a token only where Coinbase states the network and contract),
-  priced in the quote asset (a currency's ISO 4217 cash instrument, or a
-  stablecoin's own token, never the dollar).
+  SLIP-44, for a token only where Coinbase lists it on exactly one network
+  with its contract; a token on several networks, like Coinbase's USDC, is
+  Coinbase's own instrument, known by its code alone), priced in the quote
+  asset (a currency's ISO 4217 cash instrument, or the venue's stablecoin
+  instrument, never the dollar).
 - `src/coinbase/convert.py`: Coinbase's values to rows, exact decimals only
   (its candles are JSON numbers, read as Decimals from their text), the daily
   close on the declared UTC day with the forming day restated, the maker's

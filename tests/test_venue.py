@@ -87,20 +87,35 @@ def test_more_than_300_candles_is_refused_before_asking(tmp_path: Path) -> None:
     assert replay.asked == []
 
 
-def test_a_token_carries_caip19_only_where_coinbase_states_network_and_address() -> None:
+def test_a_token_carries_caip19_only_on_the_one_network_coinbase_lists() -> None:
     mapped = assets.products(body("products.json"), body("currencies.json"))
     tkn = mapped["TKN-USD"].base
-    # The address as CAIP-19 spells an EVM address: lower case.
-    assert tkn.identifier is not None
+    # One network, its contract stated: that contract, as CAIP-19 spells an
+    # EVM address (lower case).
+    assert tkn.identifier is not None and not tkn.venue_instrument
     assert tkn.identifier.value == "eip155:1/erc20:0x00000000000000000000000000000000000000aa"
-    # A chain this plugin does not spell CAIP-19 for gives none; it resolves by its code.
+    # One network this plugin does not spell CAIP-19 for gives none; it
+    # resolves by its code, and is still that one contract, not Coinbase's own.
     ply = mapped["PLY-USD"].base
-    assert ply.identifier is None
+    assert ply.identifier is None and not ply.venue_instrument
     assert (ply.resolve_by().scheme, ply.resolve_by().source) == ("symbol", "coinbase")
-    # USDC is a token on its default network, never the dollar it converts to.
+    # USDC on several networks is Coinbase's own instrument: its code alone,
+    # never the contract on its default network, never the dollar.
     usdc = mapped["BTC-USDC"].quote
-    assert usdc.kind == "token" and usdc.identifier is not None
-    assert usdc.identifier.value.startswith("eip155:1/erc20:")
+    assert usdc.kind == "token" and usdc.identifier is None and usdc.venue_instrument
+    assert (usdc.resolve_by().scheme, usdc.resolve_by().value) == ("symbol", "USDC")
+    assert usdc.networks == ("ethereum", "solana")
+    # A native coin keeps its SLIP-44 CAIP-19 whatever networks Coinbase lists.
+    btc = mapped["BTC-USD"].base
+    assert btc.identifier is not None and btc.identifier.value.endswith("/slip44:0")
+    assert not btc.venue_instrument and btc.networks == ()
+
+
+def test_a_token_coinbase_lists_on_no_network_is_its_own_instrument() -> None:
+    unlisted = assets.asset("XYZ", None)
+    assert unlisted.identifier is None and unlisted.venue_instrument
+    bare = assets.asset("NIL", {"id": "NIL", "details": {"type": "crypto"}})
+    assert bare.identifier is None and bare.venue_instrument and bare.networks == ()
 
 
 def test_a_delisted_product_is_kept_with_its_status() -> None:

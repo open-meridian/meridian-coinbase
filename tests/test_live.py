@@ -69,6 +69,7 @@ def test_products_map_to_their_assets(run: tuple[Session, dict[str, Any]]) -> No
     statuses = Counter(p.status for p in products.values())
     tokens = [p.base for p in products.values() if p.base.kind == "token"]
     with_caip = {a.venue_code.value: a.identifier.value for a in tokens if a.identifier}
+    own = {a.venue_code.value: a.networks for a in tokens if a.venue_instrument}
     quotes = Counter(p.quote.venue_code.value for p in products.values())
     summary["products"] = {
         "listed": len(products),
@@ -78,6 +79,11 @@ def test_products_map_to_their_assets(run: tuple[Session, dict[str, Any]]) -> No
         "base_tokens": len({a.venue_code.value for a in tokens}),
         "base_tokens_with_caip19": len(with_caip),
         "caip19_sample": dict(sorted(with_caip.items())[:8]),
+        "base_tokens_venue_instrument": len(own),
+        "venue_instrument_on_several_networks": sum(len(n) > 1 for n in own.values()),
+        "usdc_networks": next(
+            (p.quote.networks for p in products.values() if p.quote.venue_code.value == "USDC"), ()
+        ),
         "usdc_quoted": sorted(p for p, v in products.items() if v.quote.venue_code.value == "USDC")[
             :10
         ],

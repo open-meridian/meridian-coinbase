@@ -10,13 +10,30 @@ Coinbase states and nothing else:
   `/currencies` says its type is `fiat`.
 - **A native coin** carries its CAIP-19 by SLIP-44 coin type (`BTC`, `ETH`),
   from the short table below of chains whose CAIP-2 reference is certain.
-- **A token** carries a CAIP-19 by contract address only where Coinbase
-  states the network and the address: its `default_network`, when that is a
-  chain with a known CAIP-2 reference, and that network's `contract_address`.
-  Otherwise none, and the token resolves by its venue code, which W3.2
-  reports as missing for a person to map. Never guessed from a ticker.
+- **A token** follows the product owner's ruling (the plan's "a venue's
+  balance in a multi-network token is the venue's own instrument"): each
+  issuer contract on each chain is its own instrument, and Coinbase's
+  balance in a token is one of them only when Coinbase says which.
+  - Listed on exactly one network, with a contract address there, it is that
+    contract and carries its CAIP-19, where the network is a chain whose
+    CAIP-2 reference is certain (the table below). On any other chain, or
+    with no contract (another chain's own coin, not in NATIVE), it has none
+    yet and resolves by its venue code, which W3.2 reports as missing for a
+    person to map.
+  - Listed on several networks (Coinbase's `USDC`: Ethereum, Solana, Base,
+    ...), or on none, Coinbase has not said which contract it is: it is the
+    venue's own instrument, Coinbase's promise that it converts into one of
+    those contracts, known by `symbol@coinbase` alone and never by a
+    contract's CAIP-19. Coinbase's `default_network` names no contract the
+    balance is, so it decides nothing (the ruling: no CAIP-19 by a venue's
+    default network).
+    The networks Coinbase lists are kept beside it as plain data
+    (`Asset.networks`, a placeholder for the "convertible into" relationship
+    the entity store's spec will shape).
+  Never guessed from a ticker.
 - **A stablecoin is a token,** never its fiat currency (decisions/030): USDC
-  is the USDC token even though Coinbase converts it to dollars one for one.
+  is Coinbase's USDC instrument even though Coinbase converts it to dollars
+  one for one.
 
 The product's own ID stays a source-scoped `symbol` (source `coinbase`), the
 idea the coordinator called `coinbase-product`, and the venue's asset codes
@@ -52,30 +69,31 @@ EVM_CHAINS: dict[str, str] = {
 
 def asset(code: str, details: dict[str, Any] | None) -> Asset:
     """One Coinbase currency as an asset, from its `/currencies` record (None
-    where Coinbase did not list it)."""
+    where Coinbase did not list it, so states no network for it)."""
     venue_code = symbol(code, VENUE)
     if details is None:
-        return Asset(venue_code, "token")
+        return Asset(venue_code, "token", venue_instrument=True)
     name = str(details.get("name") or "")
     kind = (details.get("details") or {}).get("type")
     if kind == "fiat":
         return Asset(venue_code, "currency", currency(code), name)
     if code in NATIVE:
         return Asset(venue_code, "token", NATIVE[code], name)
-    return Asset(venue_code, "token", _contract(details), name)
+    listed = [n for n in details.get("supported_networks") or [] if n.get("id")]
+    if len(listed) == 1:
+        return Asset(venue_code, "token", _contract(listed[0]), name)
+    networks = tuple(str(n["id"]) for n in listed)
+    return Asset(venue_code, "token", None, name, venue_instrument=True, networks=networks)
 
 
-def _contract(details: dict[str, Any]) -> Identifier | None:
-    network = details.get("default_network")
-    chain = EVM_CHAINS.get(str(network))
-    if chain is None:
+def _contract(network: dict[str, Any]) -> Identifier | None:
+    """The CAIP-19 of the contract on the one network Coinbase lists a token
+    on, where that is a chain in EVM_CHAINS and the address is an EVM one."""
+    chain = EVM_CHAINS.get(str(network.get("id")))
+    address = str(network.get("contract_address") or "")
+    if chain is None or not (address.startswith("0x") and len(address) == 42):
         return None
-    for listed in details.get("supported_networks") or []:
-        if listed.get("id") == network:
-            address = str(listed.get("contract_address") or "")
-            if address.startswith("0x") and len(address) == 42:
-                return caip19(f"{chain}/erc20:{address.lower()}")
-    return None
+    return caip19(f"{chain}/erc20:{address.lower()}")
 
 
 def products(listed: list[dict[str, Any]], currencies: list[dict[str, Any]]) -> dict[str, Product]:
