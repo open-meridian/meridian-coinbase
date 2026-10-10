@@ -1,0 +1,8 @@
+meridian-coinbase
+Copyright 2026 Societal Lab Inc.
+
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+Coinbase is a trademark of its owner. This project is not affiliated with or
+endorsed by Coinbase; it reads Coinbase Exchange's public market data, which
+is subject to Coinbase's own terms (README, "Coinbase's terms").
