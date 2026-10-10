@@ -31,12 +31,18 @@ a deployment admin approves it.
   names, and `tests/venue_cases.py`, the one test module that knows which
   venue this is.
 - **The lake's rules, which the SDK's `dgm` suite holds** (`tests/test_suite.py`
-  runs it, unchanged from meridian-kraken's): resolve every subject before
-  recording (`products.py`: each asset by `iso4217` or `caip19` where the
-  venue states one, with its code as a `symbol` whose source is `coinbase`;
-  a token on several networks is Coinbase's own instrument, by its code
-  alone, never a contract's CAIP-19 and never its default network's), and
-  report what does not resolve (`report_missing_instrument`), once; resolve
+  runs it, unchanged from meridian-kraken's): name every subject before
+  recording -- read its record (`resolve_instrument`, W3.6) and name
+  Coinbase's asset by its identifiers (Coinbase's code, the global
+  identifier Coinbase states, another source's symbol that is Coinbase's
+  code), joining Coinbase's identifiers to the record where it lacks them;
+  never resolve an asset no subject is, so no record is minted per listed
+  asset -- and resolve each quote asset of a subject's products
+  (`products.py`: each by `iso4217` or `caip19` where the venue states one,
+  with its code as a `symbol` whose source is `coinbase`; a token on several
+  networks is Coinbase's own instrument, by its code alone, never a
+  contract's CAIP-19 and never its default network's), reporting what does
+  not resolve (`report_missing_instrument`), once; resolve
   the venue by its code (`resolve_venue`, `symbol` `coinbase` at
   `coinbase`), and where the deployment does not hold it leave each row's
   `venue_id` empty with the code beside it as reported. A price in a
@@ -56,7 +62,8 @@ a deployment admin approves it.
   the record it renders (`answers=`), so each is a read tool on the
   deployment's MCP surface, `read_connection` and `read_datasets`, answering
   what the page shows; keep the two in step. Both fit one screen at
-  1440x900 and 390x844 (one-line rows, `om-pager` for the wants).
+  1440x900 and 390x844 (one-line rows, `om-pager` for the wants, a search
+  above them: a list whose rows grow gets one).
 - **No real response is committed.** Coinbase's Market Data Terms forbid
   redistributing its data, so `tests/` and `src/coinbase/synthetic/` hold
   synthetic exchanges, shaped exactly as Coinbase sends its answers, with

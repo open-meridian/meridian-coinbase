@@ -15,14 +15,18 @@ as reported, and the plugin asks again at its next mapping, once a day.
 ## An asset not resolved
 
 The Datasets page lists assets whose identifiers matched two of your
-deployment's instruments. Their products are left out until a person resolves
-the conflict on the Instruments page.
+deployment's instruments. A product quoted in one is left out until a person
+resolves the conflict on the Instruments page; an instrument asked about
+whose record met another is still priced.
 
 ## A subject declined
 
-A reader asked for an instrument the plugin cannot price: no Coinbase product
-has it as its base (`not covered`), or Coinbase has no candle for that day
-(`source silent`).
+A reader asked for an instrument the plugin cannot price: its record names
+none of Coinbase's assets -- no Coinbase code, no global identifier Coinbase
+states, no other source's symbol that is Coinbase's code -- or no Coinbase
+product has it as its base (`not covered`), or Coinbase has no candle for
+that day (`source silent`). Add an identifier to the record on the
+Instruments page, and the plugin reads it again within a day.
 
 ## A price in USDC, not dollars
 

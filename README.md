@@ -42,12 +42,27 @@ Two datasets, declared from code in its catalogue (`declaration.py`):
   as it fills; a completed day carries its published time, the candle's
   end. Bars carry what Coinbase gave and nothing it did not: no
   volume-weighted price and no trade count.
+- **Every subject is the deployment's own record.** The lake asks for
+  instruments by the deployment's ID, most of them a custodian's records
+  that Coinbase never resolved. The plugin reads each record (W3.6, a
+  `dgm`'s read from contract v18 as ruled 2026-10-10) and names Coinbase's
+  asset it is by its identifiers: Coinbase's code (`symbol` at `coinbase`),
+  else the global identifier Coinbase states for an asset, else another
+  source's symbol that is Coinbase's code (never for a record that is a
+  security, by its class or a CUSIP or ISIN: ETH is a share's ticker too).
+  Where the record lacks
+  Coinbase's identifiers they are reported beside the one it matched, so
+  the record carries them; where that meets another record it is reported,
+  and the subject is served all the same. A record naming none of
+  Coinbase's assets is declined, not covered. Nothing is resolved for an
+  asset no subject is: no record is minted for each asset Coinbase lists.
 - **The product map**, kept in the plugin's storage (`products.py`): a
   product names a market, not an asset, so its base asset is a row's subject
-  and its quote asset what the price is in. Each asset is resolved through
-  the deployment's instrument store by the one global identifier Coinbase's
-  own statements give it, with its code as a `symbol` whose source is
-  `coinbase`:
+  and its quote asset what the price is in. Which asset each subject is is
+  kept there, and each quote asset of a subject's products is resolved
+  through the deployment's instrument store by the one global identifier
+  Coinbase's own statements give it, with its code as a `symbol` whose
+  source is `coinbase`, a record minted only where none resolves:
   - a currency (Coinbase's `fiat`) by its ISO 4217 code;
   - a native coin (BTC, ETH) by its SLIP-44 CAIP-19;
   - a token Coinbase lists on exactly one network, with its contract there,
@@ -57,8 +72,8 @@ Two datasets, declared from code in its catalogue (`declaration.py`):
     one of the issuer's contracts (the product owner's ruling of
     2026-10-03), never a contract's CAIP-19 and never Coinbase's default
     network's.
-  An asset that does not resolve (its identifiers meet two records) is
-  reported, once, and every product on it left out.
+  A quote asset that does not resolve (its identifiers meet two records) is
+  reported, once, and every product quoted in it left out.
 - **Money names an instrument.** A price in a currency names it by its ISO
   4217 code, which core resolves to the currency's cash instrument. A price
   in a token -- a BTC-USDT or BTC-USDC price -- names the token's own
@@ -79,7 +94,7 @@ Two datasets, declared from code in its catalogue (`declaration.py`):
 
 - **An FX rate.** Coinbase Exchange lists no product between two currencies,
   so the plugin presents none, and the SDK's `dgm` suite's `an-fx-rate` case
-  has no producer here: the one case of twelve this plugin does not pass,
+  has no producer here: the one case of thirteen this plugin does not pass,
   said in `tests/test_suite.py` with why. Kraken lists fiat pairs and passes
   it.
 - **The venue in its catalogue.** The catalogue is declared from code, and
@@ -127,9 +142,10 @@ A `dgm` shows no market data: viewing prices is for the reading roles.
   waited out), its calls, rate limits met and failures, the last error, and
   the venue master's ID it resolved.
 - **Datasets**: each dataset of its catalogue, the product map (products
-  listed and mapped, assets not resolved), what Coinbase entitles it to
-  (public data, no key: every product it lists), and the wants it heard,
-  standing ones first, each with what it recorded and declined.
+  listed, and mapped for the subjects the lake asked for; assets not
+  resolved), what Coinbase entitles it to (public data, no key: every
+  product it lists), and the wants it heard, standing ones first, each with
+  what it recorded and declined, under a search that narrows them.
 
 Both fit one screen at 1440x900 and 390x844, rows one line each, the wants
 paged by the kit's `om-pager`.
@@ -155,10 +171,12 @@ where in it the row came from. Kept in units of a UTC day under
     make e2e
 
 runs the plugin in synthetic mode on core's plugin harness, the runtime and
-harness of core b1b8420 pinned by digest, beside the e2e's reader
-(`e2e/reader.py`, a `reporting` plugin run from the plugin's image): the
-catalogue listed, the products mapped, both datasets licensed and the reader
-entitled, a day's closes wanted and recorded against the want (BTC-USD's in
+harness of core e4a14fc pinned by digest, beside the e2e's reader
+(`e2e/reader.py`, a `reporting` plugin run from the plugin's image, holding
+`custody` to resolve a custodian's records): the catalogue listed, the
+listing read with no record minted for any asset, both datasets licensed and
+the reader entitled, a custodian's bitcoin (by its symbol alone) read and
+named, and a day's closes wanted and recorded against the want (BTC-USD's in
 dollars, BTC-USDC's on USDC's own instrument, exactly), the dollar declined,
 BTC's live prices kept current until withdrawn, both read tools answering
 what the pages show, and `store lake` numbering each row with no holes
