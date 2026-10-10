@@ -112,3 +112,30 @@ def test_recorded_exchanges_are_replayed_from_a_plugins_raw_records(tmp_path: Pa
     assert [int(c[0]) for c in day] == [1791417600]
     assert str(day[0][4]) == "62000.10"
     assert json.loads(json.dumps(replay.ticker("BTC-USD").value, default=str))["trade_id"] == 8801
+
+
+def test_trades_are_asked_a_thousand_at_a_time_and_older_by_the_cursor(tmp_path: Path) -> None:
+    scripted = Scripted(Response(200, {}, b"[]"), Response(200, {}, b"[]"))
+    client = _client(tmp_path, scripted)
+    client.trades("BTC-USD")
+    client.trades("BTC-USD", after="8804")
+    assert scripted.asked[0].endswith("/products/BTC-USD/trades?limit=1000")
+    assert scripted.asked[1].endswith("/products/BTC-USD/trades?limit=1000&after=8804")
+    older = _client(tmp_path / "s", Synthetic()).trades("BTC-USD", after="8804").value
+    assert [t["trade_id"] for t in older] == [8803, 8802, 8801], "older, newest first"
+
+
+def test_a_recording_replays_its_stream_in_the_order_it_arrived(tmp_path: Path) -> None:
+    from coinbase.convert import CoinbaseMarket
+
+    kept = CoinbaseMarket(_client(tmp_path / "kept", Synthetic()), "synthetic")
+    kept.client.trades("BTC-USD")
+    said = ['{"type":"subscriptions","channels":[]}',
+            '{"type":"match","trade_id":9,"side":"buy","size":"0.1","price":"1",'
+            '"product_id":"BTC-USD","time":"2026-10-10T11:00:00Z"}']  # fmt: skip
+    for at, text in enumerate(said):
+        kept.heard(text, 1_791_633_600_000_000_000 + at)
+    replay = Recorded(tmp_path / "kept" / "responses")
+    assert replay.stream_sessions() == [said]
+    trades = _client(tmp_path / "replayed", replay).trades("BTC-USD").value
+    assert [t["trade_id"] for t in trades][:2] == [8806, 8805]

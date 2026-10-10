@@ -39,6 +39,19 @@ Coinbase's USDC-USD.
 Coinbase Exchange lists no product between two currencies. Use another source
 for FX.
 
+## The live feed keeps dropping
+
+The Connection page's **Stream** row says how often the feed opened and
+dropped, and why it last dropped. The plugin connects again on its own,
+waiting longer each time up to a minute, and reads the trades it missed from
+Coinbase's history. Check the deployment can reach ws-feed.exchange.coinbase.com on port 443.
+
+## No trades or quotes recorded
+
+They are recorded only while a reader follows the instrument (a standing
+want of the live or trades dataset), and only once the dataset is licensed
+and the reader entitled to it on the **Data sources** page.
+
 ## Still stuck
 
 Open the plugin's Connection page and copy its last error into a ticket with

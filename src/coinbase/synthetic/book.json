@@ -87,13 +87,7 @@
     3
    ]
   ],
-  "asks": [
-   [
-    "0.0000122",
-    "0.75",
-    2
-   ]
-  ],
+  "asks": [],
   "sequence": 100004,
   "auction_mode": false,
   "auction": null,

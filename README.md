@@ -1,31 +1,30 @@
 # meridian-coinbase
 
 Coinbase Exchange's public market data in an Open Meridian deployment's lake:
-a `dgm` plugin. It records each product's daily close and bar, and its last
-trade price and best bid and offer, for the instruments a deployment's
-readers ask about, every figure exactly as Coinbase stated it and every code
-converted at the edge. No key: Coinbase's market data is public.
+a `dgm` plugin. It records each product's daily close and bar, its last
+trade price and best bid and offer, and from contract v19 every trade and
+the best bid and offer with their sizes, streamed from Coinbase's WebSocket
+feed, for the instruments a deployment's readers ask about, every figure
+exactly as Coinbase stated it and every code converted at the edge. No key:
+Coinbase's market data is public.
 
 It is the first half of the lake's crypto pair, with
 [meridian-kraken](https://github.com/open-meridian/meridian-kraken): the two
 pass one `dgm` suite unchanged between them (meridian-design
-`plans/the-lake-prices-the-book.md`, row 6).
+`plans/the-lake-prices-the-book.md`, rows 6 and 19).
 
-**Status.** 0.1.0, built on open-meridian 0.22.0 (contract v18), which is on
-meridian-python's `main` and not yet on PyPI. Until it is, CI's `check`, `ci`
-and `e2e` jobs fail at installing the SDK or building on its base image; the
-same gates pass locally, where the Makefile builds both from the sibling
-meridian-python checkout (`make ci-local`). Not released, uploaded or
-launched anywhere.
+**Status.** 0.2.0, built on open-meridian 0.23.0 (contract v19). Not
+released, uploaded or launched anywhere.
 
 ## What it does
 
-Two datasets, declared from code in its catalogue (`declaration.py`):
+Three datasets, declared from code in its catalogue (`declaration.py`):
 
 | Dataset | Data | Modes | Day | Coinbase's standard terms |
 |---|---|---|---|---|
 | `<instance>:daily` | a close and a bar per product per day | pull, push | `Etc/UTC`, ending at 00:00 | kept, shown inside the organisation |
-| `<instance>:live` | the last trade's price; the best bid and offer | pull, stream | `Etc/UTC`, ending at 00:00 | kept two days, shown inside the organisation |
+| `<instance>:live` | the last trade's price and the best bid and offer, as prices; the best bid and offer with their sizes, as a quote | pull, stream | `Etc/UTC`, ending at 00:00 | kept two days, shown inside the organisation |
+| `<instance>:trades` | every trade | pull, stream | `Etc/UTC`, ending at 00:00 | kept two days, shown inside the organisation |
 
 - **What the lake wants, recorded.** A reader reads a price nothing has
   recorded; the lake asks this plugin (a want), which records it against the
@@ -89,14 +88,41 @@ Two datasets, declared from code in its catalogue (`declaration.py`):
 - **Exact.** Every figure is a `Decimal` from Coinbase's own text: its candles
   are JSON numbers, read from their text, never through a float. A value
   with more places than the contract's Decimal holds is not rounded.
+- **Trades and quotes, streamed** (contract v19). A standing want of the
+  live or the trades dataset -- a reader following an instrument's latest
+  quote, say -- puts the products of its subjects on Coinbase's WebSocket
+  feed (`wss://ws-feed.exchange.coinbase.com`: `matches`, `ticker` and
+  `heartbeat`, public), kept open while any want stands. Every trade is
+  recorded in `trades`, never conflated, and each product's best bid and
+  offer, with their sizes, in `live` at most once a second; only for
+  subjects under a standing want, in batches of at most 500. A crypto trade
+  has no condition codes: it is regular, eligible to set every statistic of
+  a bar in its venue's view and the consolidated one. Coinbase names **the
+  resting order's side**, so the plugin records the other as the aggressor,
+  the side that took liquidity. Keyed by its product and Coinbase's trade ID
+  (`BTC-USD:t:812345678`), valid from its time, with no business date; a
+  quote by its product and instant, a side with no order left unset, never
+  zero.
+- **Kept open, with no gap.** A stream that drops, or says nothing for 30
+  seconds, is opened again after a wait doubling from one second to a
+  minute; each time it opens, the trades since the last one recorded are
+  read back from `/products/{id}/trades` (ten pages of 1,000 at most) and
+  recorded, so the lake has no hole and a reader catches up from it by the
+  watermark it last saw. A trade heard twice -- the history and the stream
+  overlap -- is sent once. A want for a range of trades, or for a quote now,
+  is answered from REST.
 
 ### What it cannot serve
 
-- **An FX rate.** Coinbase Exchange lists no product between two currencies,
-  so the plugin presents none, and the SDK's `dgm` suite's `an-fx-rate` case
-  has no producer here: the one case of thirteen this plugin does not pass,
-  said in `tests/test_suite.py` with why. Kraken lists fiat pairs and passes
-  it.
+- **What the suite asks and Coinbase never states.** Of the SDK's `dgm`
+  suite's 21 cases (contract v19), four are not presented, each named with
+  why in `tests/venue_cases.py`, as the suite allows of a case about a kind
+  of data (`about`): `an-fx-rate` (Coinbase Exchange lists no product
+  between two currencies; Kraken lists fiat pairs and presents it),
+  `a-condition-converted` and `a-condition-not-converted` (Coinbase states
+  no condition codes: a crypto trade is regular), and `a-trade-withdrawn`
+  (Coinbase's feed never withdraws a trade it has stated). The other 17
+  pass unchanged.
 - **The venue in its catalogue.** The catalogue is declared from code, and
   the venue master's ID for Coinbase Exchange is minted by the platform, so
   `DatasetDeclaration.venue_id` is empty; each row names the venue by the ID
@@ -137,18 +163,21 @@ No secret: Coinbase's public market data needs no key.
 A `dgm` shows no market data: viewing prices is for the reading roles.
 
 - **Connection**: where it answers from (Coinbase, or synthetic mode), the
-  endpoint, what Coinbase allows (public REST 10 requests a second per IP,
-  bursts to 15) and what the plugin spends of it (at most 5 a second, a 429
-  waited out), its calls, rate limits met and failures, the last error, and
-  the venue master's ID it resolved.
+  endpoints (REST and the stream), what Coinbase allows (public REST 10
+  requests a second per IP, bursts to 15) and what the plugin spends of it
+  (at most 5 a second, a 429 waited out), its calls, rate limits met and
+  failures, the last error, the venue master's ID it resolved, and the
+  stream's session: open or not, how many products are on it, how often it
+  opened and dropped, its messages and the last one's time.
 - **Datasets**: each dataset of its catalogue, the product map (products
   listed, and mapped for the subjects the lake asked for; assets not
   resolved), what Coinbase entitles it to (public data, no key: every
   product it lists), and the wants it heard, standing ones first, each with
-  what it recorded and declined, under a search that narrows them.
+  what it recorded and declined.
 
 Both fit one screen at 1440x900 and 390x844, rows one line each, the wants
-paged by the kit's `om-pager`.
+paged by the kit's `om-pager` with its search above them (kit 0.11.0),
+which narrows them as typed.
 
 ### Offered to agents
 
@@ -162,7 +191,8 @@ Every answer Coinbase sends, an error as much as a candle, is kept in the
 storage the deployment grants the plugin before anything is read from it,
 with the request that asked for it, its status and freshness headers, and
 when it arrived (`raw.py`); a live answer is a line of its day's file, added
-only when it changed. Each row names its raw record (`RawRecordRef`) and
+only when it changed, and each message of the stream a line of its day's
+file for its type (a heartbeat, which states nothing, is not kept). Each row names its raw record (`RawRecordRef`) and
 where in it the row came from. Kept in units of a UTC day under
 `responses/`, moved past the window through the SDK.
 
@@ -171,23 +201,27 @@ where in it the row came from. Kept in units of a UTC day under
     make e2e
 
 runs the plugin in synthetic mode on core's plugin harness, the runtime and
-harness of core e4a14fc pinned by digest, beside the e2e's reader
+harness of core's v19 main pinned by digest, beside the e2e's reader
 (`e2e/reader.py`, a `reporting` plugin run from the plugin's image, holding
-`custody` to resolve a custodian's records): the catalogue listed, the
-listing read with no record minted for any asset, both datasets licensed and
-the reader entitled, a custodian's bitcoin (by its symbol alone) read and
+`custody` to resolve a custodian's records and `signal` to read trades and
+quotes): the catalogue listed, the listing read with no record minted for
+any asset, the three datasets licensed and the reader entitled, a custodian's bitcoin (by its symbol alone) read and
 named, and a day's closes wanted and recorded against the want (BTC-USD's in
 dollars, BTC-USDC's on USDC's own instrument, exactly), the dollar declined,
-BTC's live prices kept current until withdrawn, both read tools answering
-what the pages show, and `store lake` numbering each row with no holes
-(`e2e/run.py` says each step).
+BTC's live prices kept current until withdrawn, BTC's products streamed --
+the synthetic venue dropping the first connection, the plugin opening it
+again and reading back the trades it missed -- every trade recorded once
+with its aggressor, read over the day and after the reader's watermark and
+heard, and each product's latest quote with its sizes, both read tools
+answering what the pages show, and `store lake` numbering each dataset's
+rows with no holes (`e2e/run.py` says each step).
 
     make e2e-recorded RECORDED=<dir> DAY=<a day it holds>
 
 runs the same replaying a developer's recorded exchanges, reading the day
 named and holding each row to its shape rather than to the synthetic values:
-a directory of this plugin's raw records of Coinbase's real answers, recorded under personal use,
-never committed.
+a directory of this plugin's raw records of Coinbase's real answers, REST
+and the stream's messages, recorded under personal use, never committed.
 
 ## Working on it
 

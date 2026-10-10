@@ -13,6 +13,15 @@ a raw record and reads it the same way; only the transport differs:
   plugin kept of Coinbase's real answers, recorded under personal use --
   replayed by `make e2e-recorded` from a directory that is never committed
   (Coinbase's Market Data Terms; the plan's Q11).
+
+Each also answers the stream (contract v19) with `stream_sessions`: the
+messages of each connection in turn, which the market replays
+(convert.py's `connect`, stream.py's `Replayed`). The synthetic stream is
+`synthetic/stream.jsonl`, a message a line exactly as Coinbase sends it; a
+line `{"synthetic": ...}`, never sent, is where the synthetic venue drops the
+connection, so the next one opens and the gap is read from `trades.json`. A
+recording replays the messages it kept, in the order they arrived, as one
+connection.
 """
 
 from __future__ import annotations
@@ -50,15 +59,26 @@ def _epoch(text: str) -> int:
 
 class Synthetic:
     """Answers from a directory of synthetic exchanges: `products.json` and
-    `currencies.json` as Coinbase's bodies, and `candles.json`, `ticker.json`
-    and `book.json` each a body per product."""
+    `currencies.json` as Coinbase's bodies, `candles.json`, `ticker.json`,
+    `book.json` and `trades.json` each a body per product (trades newest
+    first), and `stream.jsonl` the stream's messages."""
 
     def __init__(self, directory: Path | None = None) -> None:
         root = directory or Path(str(resources.files("coinbase") / "synthetic"))
         self.held = {
             name: json.loads((root / f"{name}.json").read_text(encoding="utf-8"))
-            for name in ("products", "currencies", "candles", "ticker", "book")
+            for name in ("products", "currencies", "candles", "ticker", "book", "trades")
         }
+        lines = (root / "stream.jsonl").read_text(encoding="utf-8").splitlines()
+        self.sessions: list[list[str]] = [[]]
+        for line in lines:
+            if line.startswith('{"synthetic"'):
+                self.sessions.append([])
+            elif line.strip():
+                self.sessions[-1].append(line)
+
+    def stream_sessions(self) -> list[list[str]]:
+        return self.sessions
 
     def __call__(self, url: str, headers: Mapping[str, str]) -> Response:
         parts, query = _route(url)
@@ -75,6 +95,11 @@ class Synthetic:
                 start, end = _epoch(query["start"]), _epoch(query["end"])
                 within = [r for r in rows if start <= int(r[0]) <= end]
                 return Response(200, dict(_HEADERS), _candles(within))
+            if call == "trades" and product in self.held["trades"]:
+                after = int(query.get("after") or 0)
+                older = [t for t in self.held["trades"][product]
+                         if not after or int(t["trade_id"]) < after]  # fmt: skip
+                return _found(older[: int(query.get("limit", "100"))])
             if call in ("ticker", "book") and product in self.held[call]:
                 return _found(self.held[call][product])
         return _missing()
@@ -96,6 +121,7 @@ class Recorded:
     def __init__(self, directory: Path) -> None:
         self.latest: dict[str, str] = {}
         self.candles: dict[str, dict[int, str]] = {}
+        heard: list[tuple[int, str]] = []
         for path in sorted(directory.rglob("*")):
             if path.suffix == ".json":
                 records = [json.loads(path.read_text(encoding="utf-8"))]
@@ -106,6 +132,9 @@ class Recorded:
             else:
                 continue
             for record in records:
+                if record.get("call") == "stream":
+                    heard.append((int(record["received_at_ns"]), str(record["body"])))
+                    continue
                 if record.get("status") != 200:
                     continue
                 parts, _ = _route(str(record["request"]["url"]))
@@ -115,6 +144,10 @@ class Recorded:
                         self.candles.setdefault(parts[1], {})[int(row.split(",")[0])] = row
                 else:
                     self.latest["/".join(parts)] = body
+        self.heard = [body for _, body in sorted(heard, key=lambda h: h[0])]
+
+    def stream_sessions(self) -> list[list[str]]:
+        return [self.heard]
 
     def __call__(self, url: str, headers: Mapping[str, str]) -> Response:
         parts, query = _route(url)

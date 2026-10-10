@@ -1,15 +1,19 @@
-"""Coinbase's answers read into the venue's values: its assets, candles, ticker
-and level-1 book (convert.py), on the shapes Coinbase sends."""
+"""Coinbase's answers read into the venue's values: its assets, candles, ticker,
+level-1 book, trades and stream (convert.py), on the shapes Coinbase sends."""
 
 from __future__ import annotations
 
 import json
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
+from typing import cast
 
 from coinbase import convert
-from coinbase.market import json_decimal, number
+from coinbase.market import Print, Top, json_decimal, number
+from coinbase.raw import RawStore
 from coinbase.synthetic import Synthetic
+from coinbase.venue import Coinbase
 
 CURRENCIES = {item["id"]: item for item in Synthetic().held["currencies"]}
 
@@ -98,6 +102,7 @@ def test_the_ticker_and_the_book_at_coinbases_times() -> None:
     book = json_decimal(json.dumps(Synthetic().held["book"]["BTC-USD"]))
     top = convert.top("BTC-USD", book, "k", 5)
     assert (top.bid, top.ask, top.stated) == (Decimal("62000.10"), Decimal("62000.12"), True)
+    assert (top.bid_size, top.ask_size) == (Decimal("1.5"), Decimal("0.75"))
     empty = convert.top("BTC-USD", {"bids": [], "asks": [], "sequence": 1}, "k", 7)
     assert (empty.bid, empty.ask, empty.at_ns, empty.stated) == (None, None, 7, False)
 
@@ -114,3 +119,65 @@ def test_number_refuses_what_is_not_the_contracts_decimal() -> None:
     assert number(Decimal("1E+2")) == Decimal("1E+2")
     for refused in (None, True, 1.5, "NaN", "inf", "abc", "0." + "1" * 19):
         assert number(refused) is None, refused
+
+
+def test_a_trade_names_the_makers_side_as_coinbase_states_it() -> None:
+    body = json_decimal(json.dumps(Synthetic().held["trades"]["BTC-USD"]))
+    read = convert.prints("BTC-USD", body, "responses/trades/BTC-USD.json")
+    assert [p.ident for p in read] == ["8801", "8802", "8803", "8804", "8805", "8806"]
+    second = read[1]
+    assert (second.side, second.side_of, second.price, second.quantity) == (
+        "sell", "maker", Decimal("62010.01"), Decimal("0.0125"))  # fmt: skip
+    assert second.at_ns == convert.rfc3339_ns("2026-10-10T11:59:51.223456Z")
+    assert second.raw_key == "responses/trades/BTC-USD.json#8802"
+
+
+def _market(tmp_path: Path) -> convert.CoinbaseMarket:
+    store = RawStore(tmp_path)
+    return convert.CoinbaseMarket(Coinbase(store, transport=Synthetic()), "synthetic")
+
+
+def test_the_streams_match_and_ticker_are_read_and_kept_first(tmp_path: Path) -> None:
+    market = _market(tmp_path)
+    heard = market.heard(
+        '{"type":"match","trade_id":9,"side":"buy","size":"0.1","price":"62000.5",'
+        '"product_id":"BTC-USD","sequence":3,"time":"2026-10-10T11:00:00.5Z"}',
+        7,
+    )
+    [print_] = cast(list[Print], heard)
+    assert (print_.product, print_.side, print_.side_of, print_.ident) == (
+        "BTC-USD", "buy", "maker", "9")  # fmt: skip
+    kept = market.client.store.get(print_.raw_key)
+    assert kept and kept["call"] == "stream" and kept["received_at_ns"] == 7
+    heard = market.heard(
+        '{"type":"ticker","product_id":"BTC-USD","best_bid":"62000.4","best_bid_size":"1.25",'
+        '"best_ask":"","best_ask_size":"","sequence":4,"time":"2026-10-10T11:00:00.6Z"}',
+        8,
+    )
+    [best] = cast(list[Top], heard)
+    assert (best.bid, best.bid_size, best.ask, best.ask_size) == (
+        Decimal("62000.4"), Decimal("1.25"), None, None)  # fmt: skip
+    assert market.heard('{"type":"heartbeat","product_id":"BTC-USD"}', 9) == []
+    assert market.heard('{"type":"subscriptions","channels":[]}', 9) == []
+    lines = [p for p in tmp_path.rglob("*.jsonl")]
+    assert sorted(p.stem for p in lines) == ["match", "subscriptions", "ticker"], "no heartbeat"
+
+
+def test_the_subscription_asks_for_trades_the_ticker_and_the_heartbeat(tmp_path: Path) -> None:
+    [said] = _market(tmp_path).subscriptions(["BTC-USD", "ETH-USD"])
+    assert json.loads(said) == {"type": "subscribe", "product_ids": ["BTC-USD", "ETH-USD"],
+                                "channels": ["matches", "ticker", "heartbeat"]}  # fmt: skip
+
+
+def test_trades_are_read_back_a_page_at_a_time_to_the_time_asked(tmp_path: Path) -> None:
+    market = _market(tmp_path)
+    since = convert.rfc3339_ns("2026-10-10T11:59:52.000001Z")
+    read = market.trades("BTC-USD", since)
+    assert [p.ident for p in read] == ["8801", "8802", "8803", "8804", "8805", "8806"]
+    assert [p.ident for p in market.trades("BTC-USD")] == [p.ident for p in read]
+
+
+async def test_a_synthetic_connection_drops_but_the_last_is_held_open(tmp_path: Path) -> None:
+    market = _market(tmp_path)
+    first, last = await market.connect(""), await market.connect("")
+    assert (first.hold, last.hold) == (False, True)  # type: ignore[attr-defined]

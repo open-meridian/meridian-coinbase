@@ -1,10 +1,12 @@
 """Coinbase Exchange's public market data: the one module that speaks to it.
 
 REST at api.exchange.coinbase.com: `/products`, `/currencies`,
-`/products/{id}/candles`, `/products/{id}/ticker` and
-`/products/{id}/book?level=1`. No key: nothing here holds a credential, and
-nothing is sent but the request. The standard library's HTTP client; the
-plugin depends on nothing but the SDK.
+`/products/{id}/candles`, `/products/{id}/ticker`,
+`/products/{id}/book?level=1` and `/products/{id}/trades`; and from contract
+v19 the stream at ws-feed.exchange.coinbase.com (`STREAM`; the socket is
+stream.py's, what is said on it convert.py's). No key: nothing here holds a
+credential, and nothing is sent but the request. The standard library's HTTP
+client; the plugin depends on nothing but the SDK.
 
 **Rate limits, honoured.** Coinbase allows public REST 10 requests a second
 per IP, in bursts to 15; this client spends at most half that from a token
@@ -38,6 +40,7 @@ from .market import Health, json_decimal
 from .raw import RawStore
 
 REST = "https://api.exchange.coinbase.com"
+STREAM = "wss://ws-feed.exchange.coinbase.com"
 USER_AGENT = "meridian-coinbase (+https://open-meridian.dev)"
 
 #: Half of Coinbase's public allowance: 10 a second, bursts to 15.
@@ -45,6 +48,8 @@ RATE_PER_SECOND = 5.0
 BURST = 5
 #: Coinbase's most candles in one request.
 MOST_CANDLES = 300
+#: Coinbase's most trades in one request, newest first.
+MOST_TRADES = 1000
 #: The headers kept with a record: freshness and rate limits.
 KEPT_HEADERS = ("date", "cache-control", "age", "cf-cache-status", "etag", "retry-after")
 
@@ -211,6 +216,16 @@ class Coinbase:
             product,
             f"/products/{urllib.parse.quote(product)}/candles",
             {"granularity": "86400", "start": _iso(start_s), "end": _iso(end_s)},
+        )
+
+    def trades(self, product: str, after: str = "") -> Fetched:
+        """The product's latest trades, newest first, at most 1,000; with
+        `after`, those older than that trade ID (Coinbase's cursor)."""
+        params = {"limit": str(MOST_TRADES)}
+        if after:
+            params["after"] = after
+        return self._get(
+            "trades", product, f"/products/{urllib.parse.quote(product)}/trades", params
         )
 
     def ticker(self, product: str) -> Fetched:

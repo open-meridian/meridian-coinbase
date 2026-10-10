@@ -26,18 +26,32 @@ figure a JSON number read from its own text; `time` is the day's start at
 
 **The ticker's** `price` is the last trade, at its `time`, its `trade_id` its
 identity; **the level-1 book's** best bid and offer are its first `bids` and
-`asks`, at its `time`, its `sequence` its identity.
+`asks` (`[price, size, orders]`), at its `time`, its `sequence` its identity.
+
+**Trades** (contract v19): `/products/{id}/trades` and the stream's `match`
+(and `last_match`, the one it sends on subscribing) state a trade's
+`trade_id`, `price`, `size` and `time`, and a `side` that is **the resting
+order's**, the maker's (Coinbase's documentation): a `sell` is a buy that
+took liquidity, which the dgm records as the aggressor (dgm.py). Coinbase
+states no condition codes. **The stream's** `ticker` states the best bid and
+offer with their sizes (`best_bid`, `best_bid_size`, `best_ask`,
+`best_ask_size`) at its `time`; it is subscribed with `matches` and
+`heartbeat`, which says each second that the stream is alive. Every message
+is kept as a raw record before it is read, but a heartbeat, which states
+nothing.
 """
 
 from __future__ import annotations
 
 import datetime as _dt
+import json
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import date
 from typing import Any
 
 from .market import (
+    MAKER,
     NANOS_PER_SECOND,
     SECONDS_PER_DAY,
     Asset,
@@ -45,14 +59,17 @@ from .market import (
     Endpoint,
     Limits,
     Listed,
+    Print,
     Session,
     Tick,
     Top,
     Unread,
     day_start,
+    json_decimal,
     number,
 )
-from .venue import BURST, MOST_CANDLES, RATE_PER_SECOND, REST, Coinbase
+from .stream import Replayed, Socket, websocket
+from .venue import BURST, MOST_CANDLES, RATE_PER_SECOND, REST, STREAM, USER_AGENT, Coinbase
 
 VENUE = "coinbase"
 NAME = "Coinbase Exchange"
@@ -74,6 +91,13 @@ EVM_CHAINS: dict[str, str] = {
     "base": "eip155:8453",
     "arbitrum": "eip155:42161",
 }
+
+#: How many pages of Coinbase's trades a gap or a range is read back through:
+#: 10,000 trades, minutes of a busy product's.
+TRADE_PAGES = 10
+#: The stream's channels: trades, the ticker's best bid and offer, and the
+#: heartbeat that says it is alive.
+CHANNELS = ["matches", "ticker", "heartbeat"]
 
 LIMITS = Limits(
     allowed="Public REST: 10 requests a second per IP, bursts to 15 (Coinbase's documentation)",
@@ -205,15 +229,12 @@ def tick(product: str, body: Mapping[str, Any], raw_key: str, received_ns: int) 
 
 
 def top(product: str, body: Mapping[str, Any], raw_key: str, received_ns: int) -> Top:
-    """The level-1 book's best bid and offer; a side with no order is None."""
+    """The level-1 book's best bid and offer, with their sizes; a side with no
+    order is None."""
     bids, asks = body.get("bids") or [], body.get("asks") or []
     unread: list[Unread] = []
-    bid = number(bids[0][0]) if bids else None
-    ask = number(asks[0][0]) if asks else None
-    if bids and bid is None:
-        unread.append(Unread("book.bids.price", str(bids[0][0])))
-    if asks and ask is None:
-        unread.append(Unread("book.asks.price", str(asks[0][0])))
+    bid, bid_size = _side(bids[0] if bids else None, "book.bids", unread)
+    ask, ask_size = _side(asks[0] if asks else None, "book.asks", unread)
     stated = bool(body.get("time"))
     return Top(
         product=product,
@@ -224,6 +245,66 @@ def top(product: str, body: Mapping[str, Any], raw_key: str, received_ns: int) -
         ident=str(body.get("sequence") or ""),
         raw_key=raw_key,
         unread=tuple(unread),
+        bid_size=bid_size,
+        ask_size=ask_size,
+    )
+
+
+def _side(level: Any, field: str, unread: list[Unread]) -> tuple[Any, Any]:
+    """A book level's price and size (`[price, size, ...]`), each None where it
+    is not there; a price that does not read is kept as sent."""
+    if not level:
+        return None, None
+    price, size = number(level[0]), number(level[1]) if len(level) > 1 else None
+    if price is None:
+        unread.append(Unread(f"{field}.price", str(level[0])))
+    return price, size
+
+
+def prints(product: str, body: list[Mapping[str, Any]], raw_key: str) -> list[Print]:
+    """`/products/{id}/trades`: each trade, oldest first, its side the maker's."""
+    read = [_print(product, item, f"{raw_key}#{item.get('trade_id')}") for item in body]
+    return sorted(read, key=lambda p: (p.sequence, p.at_ns))
+
+
+def _print(product: str, item: Mapping[str, Any], raw_key: str) -> Print:
+    """One trade as REST or the stream's `match` states it."""
+    price, size = number(item.get("price")), number(item.get("size"))
+    unread = [Unread(f"trades.{f}", str(item.get(f))) for f, v in (("price", price),
+              ("size", size)) if v is None]  # fmt: skip
+    side = str(item.get("side") or "")
+    return Print(
+        product=product,
+        price=price,
+        quantity=size,
+        at_ns=rfc3339_ns(str(item["time"])),
+        ident=str(item.get("trade_id") or ""),
+        side=side if side in ("buy", "sell") else "",
+        side_of=MAKER if side in ("buy", "sell") else "",
+        raw_key=raw_key,
+        unread=tuple(unread),
+    )
+
+
+def ticked(body: Mapping[str, Any], raw_key: str, received_ns: int) -> Top:
+    """The stream's `ticker`: the best bid and offer with their sizes."""
+    unread: list[Unread] = []
+    bid, bid_size = _side([body.get("best_bid"), body.get("best_bid_size")]
+                          if body.get("best_bid") else None, "ticker.best_bid", unread)  # fmt: skip
+    ask, ask_size = _side([body.get("best_ask"), body.get("best_ask_size")]
+                          if body.get("best_ask") else None, "ticker.best_ask", unread)  # fmt: skip
+    stated = bool(body.get("time"))
+    return Top(
+        product=str(body.get("product_id") or ""),
+        bid=bid,
+        ask=ask,
+        at_ns=rfc3339_ns(str(body["time"])) if stated else received_ns,
+        stated=stated,
+        ident=str(body.get("sequence") or ""),
+        raw_key=raw_key,
+        unread=tuple(unread),
+        bid_size=bid_size,
+        ask_size=ask_size,
     )
 
 
@@ -236,14 +317,66 @@ class CoinbaseMarket:
     def __init__(self, client: Coinbase, mode: str = "live") -> None:
         self.client = client
         address = REST if mode == "live" else f"{mode}: no call leaves the deployment"
+        stream = STREAM if mode == "live" else f"{mode}: no stream leaves the deployment"
         self.session = Session(
             mode=mode,
             endpoints=(
-                Endpoint("REST", address, "products, currencies, daily candles, ticker, book"),
-            ),
+                Endpoint(
+                    "REST", address, "products, currencies, daily candles, ticker, book, trades"
+                ),
+                Endpoint("WebSocket", stream, "trades, and the best bid and offer"),
+            ),  # fmt: skip
             limits=LIMITS,
             health=client.health,
         )
+        self._replays = 0
+
+    @property
+    def stream_address(self) -> str:
+        return STREAM
+
+    async def connect(self, address: str) -> Socket:
+        """Coinbase's stream; in synthetic mode its connections replayed in
+        turn from files, the last one held open."""
+        if self.session.mode == "live":
+            return await websocket(address, USER_AGENT)
+        sessions: list[list[str]] = getattr(self.client.transport, "stream_sessions", list)()
+        held = sessions[min(self._replays, len(sessions) - 1)] if sessions else []
+        self._replays += 1
+        # Every connection but the last drops once it has said its messages,
+        # as the venue's do; the last is held open.
+        return Replayed(held, hold=self._replays >= len(sessions))
+
+    def subscriptions(self, names: Sequence[str]) -> list[str]:
+        return [json.dumps({"type": "subscribe", "product_ids": list(names),
+                            "channels": CHANNELS})]  # fmt: skip
+
+    def heard(self, text: str, received_ns: int) -> list[Print | Top]:
+        """One message of the stream, kept first; its trade or its ticker read.
+        A heartbeat is neither kept nor read; a subscription's answer or an
+        error is kept, and states neither."""
+        try:
+            body = json_decimal(text)
+        except ValueError:
+            body = {}
+        kind = str(body.get("type") or "unread") if isinstance(body, dict) else "unread"
+        if kind == "heartbeat":
+            return []
+        raw_key = self.client.store.keep_line("stream", kind, {
+            "venue": VENUE, "call": "stream", "request": {"method": "GET", "url": STREAM},
+            "received_at_ns": received_ns, "status": 101, "headers": {}, "body": text,
+        })  # fmt: skip
+        if kind == "error":  # a subscription refused: a delisted product, say
+            reason = body.get("reason") or body.get("message")
+            self.client.health.last_error = f"stream: {reason}"[:200]
+        try:
+            if kind in ("match", "last_match"):
+                return [_print(str(body["product_id"]), body, raw_key)]
+            if kind == "ticker":
+                return [ticked(body, raw_key, received_ns)]
+        except (KeyError, ValueError) as unread:
+            self.client.health.last_error = f"stream: a {kind} that did not read: {unread}"[:200]
+        return []
 
     def listing(self) -> list[Listed]:
         products = self.client.products().value
@@ -271,3 +404,20 @@ class CoinbaseMarket:
     def top(self, product: str) -> Top:
         fetched = self.client.book(product)
         return top(product, fetched.value, fetched.raw_key, fetched.received_at_ns)
+
+    def trades(self, product: str, since_ns: int = 0) -> list[Print]:
+        """The product's trades back to `since_ns`, oldest first, read back a
+        page at a time (newest first, by Coinbase's cursor) through at most
+        TRADE_PAGES; the latest page where `since_ns` is 0."""
+        read: list[Print] = []
+        after = ""
+        for _ in range(TRADE_PAGES):
+            fetched = self.client.trades(product, after)
+            page = prints(product, fetched.value, fetched.raw_key)
+            if not page or (after and page[-1].sequence >= int(after)):
+                break  # nothing older: the start of its history
+            read = page + read
+            if not since_ns or page[0].at_ns <= since_ns or not page[0].ident:
+                break
+            after = page[0].ident
+        return read
