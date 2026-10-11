@@ -139,3 +139,13 @@ def test_a_recording_replays_its_stream_in_the_order_it_arrived(tmp_path: Path) 
     assert replay.stream_sessions() == [said]
     trades = _client(tmp_path / "replayed", replay).trades("BTC-USD").value
     assert [t["trade_id"] for t in trades][:2] == [8806, 8805]
+
+
+def test_a_stream_line_as_the_first_recorder_kept_it_is_replayed(tmp_path: Path) -> None:
+    # The recordings of 2026-10-03 keep each stream message as its text and
+    # when it arrived, before the stream's raw records named their call.
+    match = '{"type":"match","trade_id":9,"side":"buy","size":"0.1","price":"1"}'
+    lines = [{"received_at_ns": 2, "text": match}, {"received_at_ns": 1, "text": "first"}]
+    (tmp_path / "stream").mkdir()
+    (tmp_path / "stream" / "1.jsonl").write_text("\n".join(json.dumps(x) for x in lines))
+    assert Recorded(tmp_path).stream_sessions() == [["first", match]]
