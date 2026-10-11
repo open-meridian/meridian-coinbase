@@ -76,6 +76,8 @@ VENUE = "coinbase"
 #: source is Coinbase, which the platform's curation adds to its record.
 VENUE_IDENTIFIERS: tuple[tuple[str, str, str], ...] = (("symbol", "coinbase", "coinbase"),)
 NAME = "Coinbase Exchange"
+#: What the venue entitles this plugin to: its public market data, no key.
+ENTITLED = "Public market data: every product it lists"
 
 #: Native coins by SLIP-44 coin type, keyed by Coinbase's currency ID.
 NATIVE: dict[str, str] = {
@@ -312,7 +314,7 @@ def ticked(body: Mapping[str, Any], raw_key: str, received_ns: int) -> Top:
 
 
 class CoinbaseMarket:
-    """Coinbase Exchange's market data, as the shared dgm asks for it."""
+    """Coinbase Exchange's market data, as the shared data plugin's work asks for it."""
 
     venue = VENUE
     venue_identifiers = VENUE_IDENTIFIERS

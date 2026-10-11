@@ -1,7 +1,7 @@
-"""Coinbase's side of the dgm suite: this plugin's synthetic exchanges, named for
+"""Coinbase's side of the data suite: this plugin's synthetic exchanges, named for
 what each of the suite's cases asks a source to present.
 
-tests/test_suite.py, the same file in meridian-kraken, runs the SDK's `dgm`
+tests/test_suite.py, the same file in meridian-kraken, runs the SDK's data
 suite unchanged against each plugin's own conversion; this module is the one
 place it learns which venue it is holding. Each answer comes through the
 plugin's real client, raw records and reading (synthetic.py's transport over
@@ -153,4 +153,11 @@ NOT_PRESENTED = {
     "a-condition-converted": "Coinbase states no condition codes: a crypto trade is regular",
     "a-condition-not-converted": "Coinbase states no condition codes: none to leave unconverted",
     "a-trade-withdrawn": "Coinbase's feed never withdraws a trade it has stated",
+    "the-takers-side-stated": "Coinbase names the resting order's side on a trade, never the "
+    "taker's: the side that took liquidity is the other one (the-makers-side-inverted)",
 }
+#: A restart's gap (contract v20): the last trade the lake holds of BASE's
+#: dollar product, by its product, trade ID and time; and the trades the
+#: venue's history states after it, in order.
+RESTARTED = ("BTC-USD", "8804", 1_791_633_593_500_000_000)
+BACKFILLED = ["8805", "8806"]

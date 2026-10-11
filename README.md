@@ -1,7 +1,7 @@
 # meridian-coinbase
 
 Coinbase Exchange's public market data in an Open Meridian deployment's lake:
-a `dgm` plugin. It records each product's daily close and bar, its last
+a data plugin. It records each product's daily close and bar, its last
 trade price and best bid and offer, and from contract v19 every trade and
 the best bid and offer with their sizes, streamed from Coinbase's WebSocket
 feed, for the instruments a deployment's readers ask about, every figure
@@ -10,10 +10,11 @@ Coinbase's market data is public.
 
 It is the first half of the lake's crypto pair, with
 [meridian-kraken](https://github.com/open-meridian/meridian-kraken): the two
-pass one `dgm` suite unchanged between them (meridian-design
+pass one data suite unchanged between them (meridian-design
 `plans/the-lake-prices-the-book.md`, rows 6 and 19).
 
-**Status.** 0.2.0, built on open-meridian 0.23.0 (contract v19). Not
+**Status.** 0.3.0, built on open-meridian 0.24.0 (contract v20), holding the
+role `data`. Not
 released, uploaded or launched anywhere.
 
 ## What it does
@@ -44,7 +45,7 @@ Three datasets, declared from code in its catalogue (`declaration.py`):
 - **Every subject is the deployment's own record.** The lake asks for
   instruments by the deployment's ID, most of them a custodian's records
   that Coinbase never resolved. The plugin reads each record (W3.6, a
-  `dgm`'s read from contract v18 as ruled 2026-10-10) and names Coinbase's
+  data plugin's read from contract v18 as ruled 2026-10-10) and names Coinbase's
   asset it is by its identifiers: Coinbase's code (`symbol` at `coinbase`),
   else the global identifier Coinbase states for an asset, else another
   source's symbol that is Coinbase's code (never for a record that is a
@@ -111,18 +112,31 @@ Three datasets, declared from code in its catalogue (`declaration.py`):
   watermark it last saw. A trade heard twice -- the history and the stream
   overlap -- is sent once. A want for a range of trades, or for a quote now,
   is answered from REST.
+- **A restart's gap, read back** (contract v20). A plugin holds nothing it
+  cannot lose, so a restart leaves a gap in the trades it streams. Started
+  again, it hears each standing want again and, before a subject goes back
+  on the stream, reads from the lake the last trade it recorded of it
+  (`ListTrades` with `latest_recorded`) and records the trades Coinbase's
+  history states after it (`meridian.roles.data.backfill_restart`), once per
+  subject; a trade recorded again is answered unchanged by its row key.
+- **Its licences** (contract v20): it reads which of its own datasets a
+  deployment admin has licensed, on start and each minute, so its Datasets
+  page says so exactly.
 
 ### What it cannot serve
 
-- **What the suite asks and Coinbase never states.** Of the SDK's `dgm`
-  suite's 21 cases (contract v19), four are not presented, each named with
+- **What the suite asks and Coinbase never states.** Of the SDK's data
+  suite's 24 cases (contract v20), five are not presented, each named with
   why in `tests/venue_cases.py`, as the suite allows of a case about a kind
-  of data (`about`): `an-fx-rate` (Coinbase Exchange lists no product
+  of data (`about`) or a field its source never states (`about_field`,
+  contract v20): `an-fx-rate` (Coinbase Exchange lists no product
   between two currencies; Kraken lists fiat pairs and presents it),
   `a-condition-converted` and `a-condition-not-converted` (Coinbase states
   no condition codes: a crypto trade is regular), and `a-trade-withdrawn`
-  (Coinbase's feed never withdraws a trade it has stated). The other 17
-  pass unchanged.
+  (Coinbase's feed never withdraws a trade it has stated), and
+  `the-takers-side-stated` (Coinbase names the resting order's side, never
+  the taker's; `the-makers-side-inverted` holds it to the other side). The
+  other 19 pass unchanged.
 - **The venue in its catalogue.** The catalogue is declared from code, and
   the venue master's ID for Coinbase Exchange is minted by the platform, so
   `DatasetDeclaration.venue_id` is empty; each row names the venue by the ID
@@ -143,7 +157,7 @@ admin confirms or replaces them in the deployment's licence on the Data
 sources page. Nothing here says that a deployment meets Coinbase's terms.
 
 So **no real Coinbase response is committed** to this public repository: the
-tests and synthetic mode use synthetic exchanges (`src/coinbase/synthetic/`),
+tests and sample data use synthetic exchanges (`src/coinbase/synthetic/`),
 shaped exactly as Coinbase documents and sends its answers, with invented
 values and invented tokens. A developer's recordings of Coinbase's real
 answers stay outside the repository and are replayed locally
@@ -153,31 +167,42 @@ answers stay outside the repository and are replayed locally
 
 | Setting | What it does |
 |---|---|
-| Synthetic mode (`synthetic`) | A developer's setting, shown only on a development deployment: answer from the synthetic exchanges this plugin carries instead of calling Coinbase, or from a developer's recorded exchanges where its storage holds them (`recorded/`). |
+| Sample data (`sample_data`) | A developer's setting, shown only on a development deployment: answer from the synthetic exchanges this plugin carries instead of calling Coinbase, or from a developer's recorded exchanges where its storage holds them (`recorded/`). |
 | Raw responses' window (`responses_window_days`, `responses_past_window`) | The SDK's, for the plugin's one kind of raw record: how long Coinbase's answers stay in its storage (30 days by default), and whether a day past it is archived, kept or deleted. |
 
 No secret: Coinbase's public market data needs no key.
 
 ## Its pages, under Manage
 
-A `dgm` shows no market data: viewing prices is for the reading roles.
+The data role's two pages (meridian-design
+`spec/plugin-pages-follow-their-role.md`), the same sections, rows, labels
+and "not set up yet" states as every data plugin's, drawn from the SDK's
+role templates (`meridian.roles.data`); Coinbase's nuance only at their
+extension points. A data plugin shows no market data: viewing prices is for
+the reading roles.
 
-- **Connection**: where it answers from (Coinbase, or synthetic mode), the
-  endpoints (REST and the stream), what Coinbase allows (public REST 10
-  requests a second per IP, bursts to 15) and what the plugin spends of it
-  (at most 5 a second, a 429 waited out), its calls, rate limits met and
-  failures, the last error, the venue master's ID it resolved, and the
-  stream's session: open or not, how many products are on it, how often it
-  opened and dropped, its messages and the last one's time.
-- **Datasets**: each dataset of its catalogue, the product map (products
-  listed, and mapped for the subjects the lake asked for; assets not
-  resolved), what Coinbase entitles it to (public data, no key: every
-  product it lists), and the wants it heard, standing ones first, each with
-  what it recorded and declined.
+- **Connection**: "Key" -- the mode (Live, or Sample data), "No key needed",
+  what Coinbase entitles it to (public data: every product it lists) and, the
+  role's row for a source of one venue, the venue master's ID it resolved;
+  "Limits and use" -- what Coinbase allows and what the plugin spends of it,
+  its calls and the rate-limited ones waited out, the last call and the last
+  error; "Stream" -- the session: open or not, the products on it, its
+  reconnects and messages and its last error.
+- **Datasets**: "Served" -- each dataset of its catalogue, its data, how its
+  rows arrive, its day, its default terms and whether a deployment admin has
+  licensed it ("Licensed" or "Not licensed yet", read from the deployment
+  from contract v20), what it recorded and declined and when it last
+  recorded; "Wants" -- the wants it heard and the standing wants it keeps
+  current, searched and paged by the kit's `om-pager`; "Subjects" -- whether
+  the deployment lets it read an instrument's record; then a section under
+  Coinbase's name with the product map (products listed, and mapped for the subjects
+  the lake asked for; assets not resolved). Before the lake has asked
+  anything it says the next step: "No wants yet", a deployment admin
+  licensing its datasets on Data sources.
 
-Both fit one screen at 1440x900 and 390x844, rows one line each, the wants
-paged by the kit's `om-pager` with its search above them (kit 0.11.0),
-which narrows them as typed.
+Its Summary carries the data role's figures, in the role's order:
+Connection, Entitled at the vendor, Stream and Last recorded. Both pages
+fit one screen at 1440x900 and 390x844, rows one line each.
 
 ### Offered to agents
 
@@ -200,8 +225,8 @@ where in it the row came from. Kept in units of a UTC day under
 
     make e2e
 
-runs the plugin in synthetic mode on core's plugin harness, the runtime and
-harness of core's v19 main pinned by digest, beside the e2e's reader
+runs the plugin with sample data on core's plugin harness, the runtime and
+harness of the core it pins by digest, beside the e2e's reader
 (`e2e/reader.py`, a `reporting` plugin run from the plugin's image, holding
 `custody` to resolve a custodian's records and `signal` to read trades and
 quotes): the catalogue listed, the listing read with no record minted for
@@ -226,7 +251,7 @@ and the stream's messages, recorded under personal use, never committed.
 ## Working on it
 
     make ci-local        # every gate: lint, tests, plugin check, the image, e2e, the pair the same
-    make test            # the tests, the SDK's dgm suite among them
+    make test            # the tests, the SDK's data suite among them
     make preview         # preview/: each page on synthetic data, linking the kit
     make install-hooks   # git push runs ci-local first
 

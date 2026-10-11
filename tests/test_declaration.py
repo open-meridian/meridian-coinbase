@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from coinbase.declaration import CATALOGUE, DECLARATION, SYNTHETIC
+from coinbase.declaration import CATALOGUE, DECLARATION, SAMPLE_DATA
 
 
 def test_three_datasets_daily_live_and_trades_on_the_utc_day() -> None:
@@ -31,9 +31,14 @@ def test_three_datasets_daily_live_and_trades_on_the_utc_day() -> None:
     assert not any(d.licence_default and d.licence_default.personal_use for d in CATALOGUE)
 
 
-def test_no_secret_and_synthetic_a_developers_setting() -> None:
+def test_no_key_needed_and_sample_data_a_developers_setting() -> None:
+    # The data role's settings (spec/plugin-pages-follow-their-role): one
+    # environment and no credential, so sample data alone, labelled as the
+    # SDK's helper labels it.
+    assert isinstance(DECLARATION.settings, tuple)
     [setting] = DECLARATION.settings
-    assert (setting.name, setting.developer, setting.secret) == (SYNTHETIC, True, False)
+    assert (setting.name, setting.developer, setting.secret) == (SAMPLE_DATA, True, False)
+    assert (setting.label, setting.default) == ("Sample data", False)
     assert DECLARATION.storage is not None
 
 

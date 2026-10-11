@@ -6,7 +6,7 @@ it. It needs no key: Coinbase's market data is public.
 
 ## Its role
 
-It holds one role, `dgm`: it records prices and bars into the lake, with
+It holds one role, `data`: it records prices and bars into the lake, with
 Coinbase's codes converted to your deployment's instruments, and keeps
 Coinbase's answers in its own storage. It shows no prices itself: reading
 them is for the reporting, portfolio, compliance and signal plugins.

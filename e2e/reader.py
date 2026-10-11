@@ -3,7 +3,7 @@ reading roles, so the lake has someone whose reads it asks this plugin for.
 It holds `custody` beside `reporting` only so that it can name the
 instruments it asks about as a custodian's book would, by resolving their
 identifiers (W3.1): bitcoin by the custodian's symbol alone, never resolved
-by Coinbase, a record the plugin names by reading it (W3.6, a dgm's from
+by Coinbase, a record the plugin names by reading it (W3.6, a data plugin's from
 contract v18 as ruled 2026-10-10); and the dollar by ISO 4217.
 
 From contract v19 it holds `signal` too, which reads and hears trades and
