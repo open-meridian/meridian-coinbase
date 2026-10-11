@@ -72,6 +72,9 @@ from .stream import Replayed, Socket, websocket
 from .venue import BURST, MOST_CANDLES, RATE_PER_SECOND, REST, STREAM, USER_AGENT, Coinbase
 
 VENUE = "coinbase"
+#: Coinbase in the venue master: no MIC, so its own code, as a symbol whose
+#: source is Coinbase, which the platform's curation adds to its record.
+VENUE_IDENTIFIERS: tuple[tuple[str, str, str], ...] = (("symbol", "coinbase", "coinbase"),)
 NAME = "Coinbase Exchange"
 
 #: Native coins by SLIP-44 coin type, keyed by Coinbase's currency ID.
@@ -312,6 +315,7 @@ class CoinbaseMarket:
     """Coinbase Exchange's market data, as the shared dgm asks for it."""
 
     venue = VENUE
+    venue_identifiers = VENUE_IDENTIFIERS
     name = NAME
 
     def __init__(self, client: Coinbase, mode: str = "live") -> None:

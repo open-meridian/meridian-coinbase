@@ -48,7 +48,7 @@ a deployment admin approves it.
   networks is Coinbase's own instrument, by its code alone, never a
   contract's CAIP-19 and never its default network's), reporting what does
   not resolve (`report_missing_instrument`), once; resolve
-  the venue by its code (`resolve_venue`, `symbol` `coinbase` at
+  the venue by its code (`resolve_venue`, by `convert.VENUE_IDENTIFIERS`: `symbol` `coinbase` at
   `coinbase`), and where the deployment does not hold it leave each row's
   `venue_id` empty with the code beside it as reported. A price in a
   currency names it by its ISO 4217 code; a price in any token -- USDT,
