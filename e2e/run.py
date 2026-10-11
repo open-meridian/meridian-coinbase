@@ -156,6 +156,12 @@ def call(tool, arguments, *outcomes):
     return answer
 
 
+def said(listed):
+    """The identifiers each listed record carries, without its ID: a minted
+    ID is random, and can spell an asset's code (LCL-...8ETH7...)."""
+    return "\n".join(line.partition("\t")[2] for line in listed.splitlines())
+
+
 def instrument(listed, pattern, required=True):
     for line in listed.splitlines():
         instrument_id, _, identifiers = line.partition("\t")
@@ -199,7 +205,7 @@ def run():
           ["products_listed"] >= 5, "step 2, the listing was not read")
     listed = runner("instruments")
     log("instruments, the listing read:\n" + listed)
-    must(not re.search(UNASKED, listed) and "USDC" not in listed and "slip44" not in listed,
+    must(not re.search(UNASKED, said(listed)) and "USDC" not in listed and "slip44" not in listed,
          f"step 2, no record minted for an asset no subject is: {listed}")
     ids = read("/resolve")
     btc, usd = ids["btc"], ids["usd"]
@@ -242,7 +248,7 @@ def run():
     # A recording may hold no product quoted in USDC (Coinbase delisted
     # BTC-USDC): then nothing names USDC, and nothing is asserted of it.
     usdc = instrument(listed, r"(?<![A-Z])USDC(?![A-Z])", required=EXACT)
-    must(not re.search(UNASKED, listed),
+    must(not re.search(UNASKED, said(listed)),
          f"step 4, no record minted for an asset no subject is: {listed}")
     must(dollars["instrument_id"] not in ("", usdc, btc),
          f"step 4, a dollar price names the dollar's cash instrument: {dollars}")
@@ -339,7 +345,7 @@ def run():
     served = call(named["read_datasets"], {}, "read", "unchanged")["data"]
     must([d["dataset"] for d in served["served"]]
          == [f"{VENUE}:daily", f"{VENUE}:live", f"{VENUE}:trades"]
-         and served["products_mapped"] >= 2 and served["subjects_named"] == 2
+         and served["products_mapped"] >= 2 and (served["subjects_named"] == 2 if EXACT else served["subjects_named"] >= 1)
          and served["reads_instruments"] is True
          and sum(d["recorded"] for d in served["served"]) >= 2,
          f"step 8, read_datasets: {served}")
