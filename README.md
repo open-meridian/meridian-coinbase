@@ -9,7 +9,7 @@ exactly as Coinbase stated it and every code converted at the edge. No key:
 Coinbase's market data is public.
 
 It is the first half of the lake's crypto pair, with
-[meridian-kraken](https://github.com/open-meridian/meridian-kraken): the two
+[meridian-kraken](https://github.com/open-meridian/plugin-kraken): the two
 pass one data suite unchanged between them (meridian-design
 `plans/the-lake-prices-the-book.md`, rows 6 and 19).
 
