@@ -155,6 +155,11 @@ NOT_PRESENTED = {
     "a-trade-withdrawn": "Coinbase's feed never withdraws a trade it has stated",
     "the-takers-side-stated": "Coinbase names the resting order's side on a trade, never the "
     "taker's: the side that took liquidity is the other one (the-makers-side-inverted)",
+    "reads-a-calendar": "a crypto venue trading 24/7: it reads no settlement calendar",
+    "asks-for-a-settlement-date": (
+        "records prices, bars and trades as Coinbase Exchange publishes them; never computes a "
+        "settlement date"
+    ),
 }
 #: A restart's gap (contract v20): the last trade the lake holds of BASE's
 #: dollar product, by its product, trade ID and time; and the trades the

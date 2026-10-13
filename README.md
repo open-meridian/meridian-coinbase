@@ -13,7 +13,7 @@ It is the first half of the lake's crypto pair, with
 pass one data suite unchanged between them (meridian-design
 `plans/the-lake-prices-the-book.md`, rows 6 and 19).
 
-**Status.** 0.4.0, built on open-meridian 0.25.0 (contract v21), holding the
+**Status.** 0.5.0, built on open-meridian 0.26.0 (contract v22), holding the
 role `data`. Not
 released, uploaded or launched anywhere.
 
@@ -126,7 +126,7 @@ Three datasets, declared from code in its catalogue (`declaration.py`):
 ### What it cannot serve
 
 - **What the suite asks and Coinbase never states.** Of the SDK's data
-  suite's 24 cases (contract v20), five are not presented, each named with
+  suite's 26 cases (contract v22), seven are not presented, each named with
   why in `tests/venue_cases.py`, as the suite allows of a case about a kind
   of data (`about`) or a field its source never states (`about_field`,
   contract v20): `an-fx-rate` (Coinbase Exchange lists no product
@@ -135,8 +135,10 @@ Three datasets, declared from code in its catalogue (`declaration.py`):
   no condition codes: a crypto trade is regular), and `a-trade-withdrawn`
   (Coinbase's feed never withdraws a trade it has stated), and
   `the-takers-side-stated` (Coinbase names the resting order's side, never
-  the taker's; `the-makers-side-inverted` holds it to the other side). The
-  other 19 pass unchanged.
+  the taker's; `the-makers-side-inverted` holds it to the other side), and
+  contract v22's `reads-a-calendar` and `asks-for-a-settlement-date` (a
+  venue trading 24/7: it reads no settlement calendar and never computes a
+  settlement date). The other 19 pass unchanged.
 - **The venue in its catalogue.** The catalogue is declared from code, and
   the venue master's ID for Coinbase Exchange is minted by the platform, so
   `DatasetDeclaration.venue_id` is empty; each row names the venue by the ID
