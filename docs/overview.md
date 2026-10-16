@@ -4,6 +4,8 @@ The Coinbase plugin puts Coinbase Exchange's public market data into your
 deployment's lake, where the plugins that value and report on your book read
 it. It needs no key: Coinbase's market data is public.
 
+It is a data plugin: its first-use path, its two pages and its Summary figures are every data plugin's, described once on [Using a data plugin](https://open-meridian.dev/how-to/using-a-data-plugin/). These sections cover what is Coinbase's own.
+
 ## Its role
 
 It holds one role, `data`: it records prices and bars into the lake, with
@@ -26,6 +28,8 @@ them is for the reporting, portfolio, compliance and signal plugins.
   condition codes, so every trade counts for a day's open, high, low, close
   and volume. Trades are a dataset of their own, so you license and keep
   them apart from live prices.
+
+## If the feed drops
 
 If the live feed drops, the plugin connects again and reads the trades it
 missed from Coinbase's trade history, so nothing is lost and a reader catches up
