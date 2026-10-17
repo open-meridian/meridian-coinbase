@@ -41,9 +41,16 @@ from meridian.plugin.v1 import operations_pb2 as ops
 PORT = 8088
 LOOP = asyncio.new_event_loop()
 ASKED = {
-    "btc": [ops.Identifier(scheme="symbol", value="BTC", source="e2e-custodian")],
+    # Contract v24 (W10.6, W10.7): the lake never wants a provisional
+    # record, so the custodian names bitcoin by its CAIP-19 too, which the
+    # stand-in platform holds, beside its own symbol.
+    "btc": [ops.Identifier(scheme="caip19", value="bip122:000000000019d6689c085ae165831e93/slip44:0"),
+            ops.Identifier(scheme="symbol", value="BTC", source="e2e-custodian")],
     "usd": [ops.Identifier(scheme="iso4217", value="USD")],
 }
+#: What a custodian's statement states beside an identifier (contract v24,
+#: W3.7): a description and a currency, the minimum a record is minted from.
+STATED = {"btc": ("Bitcoin", "USD")}
 
 
 def trade_json(trade, caught_up=False):
@@ -114,7 +121,12 @@ class Reader:
     async def resolve(self):
         for name, identifiers in ASKED.items():
             if name not in self.ids:
-                found = await self.plugin.resolve_identifier(identifiers=identifiers)
+                description, currency = STATED.get(name, ("", ""))
+                found = await self.plugin.resolve_identifier(
+                    identifiers=identifiers,
+                    stated_description=description,
+                    stated_currency=currency,
+                )
                 if not found.instrument_id:
                     raise RuntimeError(f"{name} did not resolve: {found}")
                 self.ids[name] = found.instrument_id
