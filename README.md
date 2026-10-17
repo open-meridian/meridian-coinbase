@@ -8,12 +8,14 @@ feed, for the instruments a deployment's readers ask about, every figure
 exactly as Coinbase stated it and every code converted at the edge. No key:
 Coinbase's market data is public.
 
-It is the first half of the lake's crypto pair, with
-[meridian-kraken](https://github.com/open-meridian/plugin-kraken): the two
-pass one data suite unchanged between them (meridian-design
-`plans/the-lake-prices-the-book.md`, rows 6 and 19).
+It is one of the lake's crypto pair, with
+[meridian-kraken](https://github.com/open-meridian/plugin-kraken): each runs the SDK's
+data suite and its checks for a pairs venue unchanged against its own conversion
+(meridian-design `plans/the-lake-prices-the-book.md`, rows 6 and 19); what the two do alike is
+the SDK's (`meridian.roles.data.pairs`, open-meridian 0.30.0), never copied
+between them.
 
-**Status.** 0.6.0, built on open-meridian 0.29.0 (contract v25: its whole declaration, and docs/, which a deployment shows on its Documentation tab), holding the
+**Status.** 0.7.0, built on open-meridian 0.30.0 (contract v25: its whole declaration, and docs/, which a deployment shows on its Documentation tab; its work the SDK's role helpers), holding the
 role `data`. Not
 released, uploaded or launched anywhere.
 
@@ -56,7 +58,7 @@ Three datasets, declared from code in its catalogue (`declaration.py`):
   and the subject is served all the same. A record naming none of
   Coinbase's assets is declined, not covered. Nothing is resolved for an
   asset no subject is: no record is minted for each asset Coinbase lists.
-- **The product map**, kept in the plugin's storage (`products.py`): a
+- **The product map**, kept in the plugin's storage (`meridian.roles.data.pairs.ProductMap`): a
   product names a market, not an asset, so its base asset is a row's subject
   and its quote asset what the price is in. Which asset each subject is is
   kept there, and each quote asset of a subject's products is resolved
@@ -217,7 +219,7 @@ level. The plugin has no route that changes anything.
 Every answer Coinbase sends, an error as much as a candle, is kept in the
 storage the deployment grants the plugin before anything is read from it,
 with the request that asked for it, its status and freshness headers, and
-when it arrived (`raw.py`); a live answer is a line of its day's file, added
+when it arrived (`meridian.edge.RawStore`); a live answer is a line of its day's file, added
 only when it changed, and each message of the stream a line of its day's
 file for its type (a heartbeat, which states nothing, is not kept). Each row names its raw record (`RawRecordRef`) and
 where in it the row came from. Kept in units of a UTC day under

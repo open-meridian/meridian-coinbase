@@ -113,7 +113,7 @@ def _candles(rows: list[list[Any]]) -> bytes:
 
 
 class Recorded:
-    """Answers from a developer's recorded raw records (raw.py's files under a
+    """Answers from a developer's recorded raw records (`meridian.edge.RawStore`'s files under a
     `responses/` directory): the latest answer kept for each request's path,
     and for candles every candle kept for the product, within the range
     asked."""
