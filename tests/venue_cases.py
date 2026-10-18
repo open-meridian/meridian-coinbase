@@ -1,13 +1,15 @@
-"""Coinbase's side of the data suite: this plugin's synthetic exchanges, named for
-what each of the suite's cases asks a source to present.
+"""Coinbase's side of the data role's checks: this plugin's synthetic exchanges,
+named for what each of the checks asks a source to present.
 
-tests/test_suite.py, the same file in meridian-kraken, runs the SDK's data
-suite unchanged against each plugin's own conversion; this module is the one
-place it learns which venue it is holding. Each answer comes through the
-plugin's real client, raw records and reading (synthetic.py's transport over
-the exchanges this package carries, `src/coinbase/synthetic/`), with
-invented values; real recordings are never committed (Coinbase's Market Data
-Terms; the plan's Q11).
+tests/test_data_role.py runs the SDK's checks for a pairs venue
+(`meridian.roles.data.testing.PairsChecks`) -- the data suite unchanged,
+the venue's work past the suite's cases, and the pages -- against this
+plugin's own conversion; this module is the one place they learn which
+venue they are holding. Each answer comes through the plugin's real client,
+raw records and reading (synthetic.py's transport over the exchanges this
+package carries, `src/coinbase/synthetic/`), with invented values; real
+recordings are never committed (Coinbase's Market Data Terms; the plan's
+Q11).
 """
 
 from __future__ import annotations
@@ -19,18 +21,24 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from coinbase import page, raw, stream, synthetic
+from meridian.edge import RawStore
+from meridian.roles.data.pairs import MAKER, Feed, Market
+
+from coinbase import page
 from coinbase.convert import CoinbaseMarket
-from coinbase.dgm import Dgm, Standing
-from coinbase.market import MAKER, Market
-from coinbase.products import ProductMap
-from coinbase.raw import RawStore
+from coinbase.stream import Replayed, Socket, Stream
 from coinbase.synthetic import Synthetic
 from coinbase.venue import Coinbase, RateLimiter
 
-__all__ = ["Dgm", "ProductMap", "Standing", "market", "page", "raw", "stream", "synthetic"]
+__all__ = ["page"]
 
-SYNTHETIC = Path(__file__).parent.parent / "src" / "coinbase" / "synthetic"
+PACKAGE = Path(__file__).parent.parent / "src" / "coinbase"
+#: The plugin's own modules no float may reach.
+CONVERSION = (PACKAGE / "convert.py", PACKAGE / "synthetic.py")
+#: The plugin's stream: its own session over its own transport.
+STREAM = Stream
+
+SYNTHETIC = PACKAGE / "synthetic"
 
 #: The venue's name as a symbol's source, and the plugin's.
 VENUE = "coinbase"
@@ -169,3 +177,20 @@ NOT_PRESENTED = {
 #: venue's history states after it, in order.
 RESTARTED = ("BTC-USD", "8804", 1_791_633_593_500_000_000)
 BACKFILLED = ["8805", "8806"]
+
+
+def replayed(messages: list[str]) -> Socket:
+    """A connection saying `messages` and dropping, as a venue's does."""
+    return Replayed(messages, hold=False)
+
+
+def stream_sessions(feed: Feed) -> list[list[str]]:
+    """The messages of each of the synthetic venue's connections, in turn."""
+    sessions: list[list[str]] = feed.market.client.transport.stream_sessions()  # type: ignore[attr-defined]
+    return sessions
+
+
+def raw_store(feed: Feed) -> RawStore:
+    """The raw records the plugin's client keeps."""
+    store: RawStore = feed.market.client.store  # type: ignore[attr-defined]
+    return store

@@ -1,4 +1,5 @@
-"""Coinbase's answers, read into the venue's values (market.py): the one place
+"""Coinbase's answers, read into the venue's values (the SDK's
+`meridian.roles.data.pairs`): the one place
 Coinbase's vocabulary is read.
 
 **Assets** (the plan's "Identifiers for a pair"; the product owner's ruling of
@@ -32,7 +33,7 @@ identity; **the level-1 book's** best bid and offer are its first `bids` and
 (and `last_match`, the one it sends on subscribing) state a trade's
 `trade_id`, `price`, `size` and `time`, and a `side` that is **the resting
 order's**, the maker's (Coinbase's documentation): a `sell` is a buy that
-took liquidity, which the dgm records as the aggressor (dgm.py). Coinbase
+took liquidity, which the SDK's feed records as the aggressor. Coinbase
 states no condition codes. **The stream's** `ticker` states the best bid and
 offer with their sizes (`best_bid`, `best_bid_size`, `best_ask`,
 `best_ask_size`) at its `time`; it is subscribed with `matches` and
@@ -50,24 +51,19 @@ from collections.abc import Mapping, Sequence
 from datetime import date
 from typing import Any
 
-from .market import (
-    MAKER,
+from meridian.roles.data import (
     NANOS_PER_SECOND,
     SECONDS_PER_DAY,
-    Asset,
-    Candle,
     Endpoint,
     Limits,
-    Listed,
-    Print,
     Session,
-    Tick,
-    Top,
     Unread,
     day_start,
     json_decimal,
     number,
 )
+from meridian.roles.data.pairs import MAKER, Asset, Candle, Listed, Print, Tick, Top
+
 from .stream import Replayed, Socket, websocket
 from .venue import BURST, MOST_CANDLES, RATE_PER_SECOND, REST, STREAM, USER_AGENT, Coinbase
 

@@ -9,8 +9,8 @@ from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
+from meridian.edge import RawStore
 
-from coinbase.raw import RawStore
 from coinbase.synthetic import Recorded, Synthetic
 from coinbase.venue import Coinbase, RateLimiter, Response, VenueError
 

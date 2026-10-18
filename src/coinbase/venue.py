@@ -13,7 +13,7 @@ per IP, in bursts to 15; this client spends at most half that from a token
 bucket, and a 429 is waited out (its Retry-After, else 1, 2, 4 seconds) and
 asked again at most three times, each one counted.
 
-**Every response is a raw record first** (raw.py), kept exactly as its bytes
+**Every response is a raw record first** (`meridian.edge.RawStore`), kept exactly as its bytes
 arrived, with its status and the headers that say how fresh it is
 (Coinbase's REST sits behind a CDN cache: `cache-control`, `age`,
 `cf-cache-status`), before anything is read from it. A body is parsed with
@@ -36,8 +36,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from .market import Health, json_decimal
-from .raw import RawStore
+from meridian.edge import RawStore
+from meridian.roles.data import Health, json_decimal
 
 REST = "https://api.exchange.coinbase.com"
 STREAM = "wss://ws-feed.exchange.coinbase.com"

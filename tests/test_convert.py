@@ -9,9 +9,11 @@ from decimal import Decimal
 from pathlib import Path
 from typing import cast
 
+from meridian.edge import RawStore
+from meridian.roles.data import json_decimal, number
+from meridian.roles.data.pairs import Print, Top
+
 from coinbase import convert
-from coinbase.market import Print, Top, json_decimal, number
-from coinbase.raw import RawStore
 from coinbase.synthetic import Synthetic
 from coinbase.venue import Coinbase
 
