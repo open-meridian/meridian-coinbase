@@ -40,6 +40,17 @@ offer with their sizes (`best_bid`, `best_bid_size`, `best_ask`,
 `heartbeat`, which says each second that the stream is alive. Every message
 is kept as a raw record before it is read, but a heartbeat, which states
 nothing.
+
+**Depth** (open question 232, ruled 2026-10-17): the book's levels, which no
+lake kind holds yet, are kept as raw records and read into nothing. The
+public `level2_batch` channel (Coinbase's `level2`, which needs a key,
+batched every 50 ms and open to all) sends the whole book as a `snapshot`
+of `[price, size]` levels, then `l2update`s, each `changes` of `[side,
+price, size]`, a size the level's new total and `"0"` a level gone, at its
+`time`. Kept whole, the snapshot
+and every update rebuild the book at any moment, so a depth kind placed later
+converts them with nothing lost. It is asked for in its own subscription,
+so a refusal of it leaves the trades and the ticker streaming.
 """
 
 from __future__ import annotations
@@ -99,6 +110,12 @@ TRADE_PAGES = 10
 #: The stream's channels: trades, the ticker's best bid and offer, and the
 #: heartbeat that says it is alive.
 CHANNELS = ["matches", "ticker", "heartbeat"]
+#: The book's depth, kept raw (open question 232): the public batched level-2
+#: channel, asked for apart.
+DEPTH_CHANNEL = "level2_batch"
+#: The depth channel's messages: kept as raw records, read into no row until
+#: a depth kind is placed.
+DEPTH_MESSAGES = ("snapshot", "l2update")
 
 LIMITS = Limits(
     allowed="Public REST: 10 requests a second per IP, bursts to 15 (Coinbase's documentation)",
@@ -326,7 +343,9 @@ class CoinbaseMarket:
                 Endpoint(
                     "REST", address, "products, currencies, daily candles, ticker, book, trades"
                 ),
-                Endpoint("WebSocket", stream, "trades, and the best bid and offer"),
+                Endpoint(
+                    "WebSocket", stream, "trades, the best bid and offer, and depth (kept raw)"
+                ),
             ),  # fmt: skip
             limits=LIMITS,
             health=client.health,
@@ -350,13 +369,14 @@ class CoinbaseMarket:
         return Replayed(held, hold=self._replays >= len(sessions))
 
     def subscriptions(self, names: Sequence[str]) -> list[str]:
-        return [json.dumps({"type": "subscribe", "product_ids": list(names),
-                            "channels": CHANNELS})]  # fmt: skip
+        """Trades, the ticker and the heartbeat; then depth, apart."""
+        return [json.dumps({"type": "subscribe", "product_ids": list(names), "channels": each})
+                for each in (CHANNELS, [DEPTH_CHANNEL])]  # fmt: skip
 
     def heard(self, text: str, received_ns: int) -> list[Print | Top]:
         """One message of the stream, kept first; its trade or its ticker read.
-        A heartbeat is neither kept nor read; a subscription's answer or an
-        error is kept, and states neither."""
+        A heartbeat is neither kept nor read; depth (`DEPTH_MESSAGES`), a
+        subscription's answer or an error is kept, and read into no row."""
         try:
             body = json_decimal(text)
         except ValueError:

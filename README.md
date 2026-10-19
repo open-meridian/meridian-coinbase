@@ -5,17 +5,18 @@ a data plugin. It records each product's daily close and bar, its last
 trade price and best bid and offer, and from contract v19 every trade and
 the best bid and offer with their sizes, streamed from Coinbase's WebSocket
 feed, for the instruments a deployment's readers ask about, every figure
-exactly as Coinbase stated it and every code converted at the edge. No key:
-Coinbase's market data is public.
+exactly as Coinbase stated it and every code converted at the edge; and it
+keeps the order book's depth from that feed as raw records, until the lake
+has a kind for it. No key: Coinbase's market data is public.
 
 It is one of the lake's crypto pair, with
 [meridian-kraken](https://github.com/open-meridian/plugin-kraken): each runs the SDK's
 data suite and its checks for a pairs venue unchanged against its own conversion
 (meridian-design `plans/the-lake-prices-the-book.md`, rows 6 and 19); what the two do alike is
-the SDK's (`meridian.roles.data.pairs`, open-meridian 0.30.0), never copied
+the SDK's (`meridian.roles.data.pairs`, open-meridian 0.31.0), never copied
 between them.
 
-**Status.** 0.7.0, built on open-meridian 0.30.0 (contract v25: its whole declaration, and docs/, which a deployment shows on its Documentation tab; its work the SDK's role helpers), holding the
+**Status.** 0.8.0, built on open-meridian 0.31.0 (contract v26: the data suite's v26 cases; the book's depth kept raw, open question 232; its work the SDK's role helpers), holding the
 role `data`. Not
 released, uploaded or launched anywhere.
 
@@ -95,7 +96,8 @@ Three datasets, declared from code in its catalogue (`declaration.py`):
   live or the trades dataset -- a reader following an instrument's latest
   quote, say -- puts the products of its subjects on Coinbase's WebSocket
   feed (`wss://ws-feed.exchange.coinbase.com`: `matches`, `ticker` and
-  `heartbeat`, public), kept open while any want stands. Every trade is
+  `heartbeat`, and `level2_batch` for depth, all public), kept open while
+  any want stands. Every trade is
   recorded in `trades`, never conflated, and each product's best bid and
   offer, with their sizes, in `live` at most once a second; only for
   subjects under a standing want, in batches of at most 500. A crypto trade
@@ -106,6 +108,15 @@ Three datasets, declared from code in its catalogue (`declaration.py`):
   (`BTC-USD:t:812345678`), valid from its time, with no business date; a
   quote by its product and instant, a side with no order left unset, never
   zero.
+- **Depth, kept raw** (open question 232, ruled 2026-10-17). No lake kind
+  holds the book's levels yet, so the products on the stream are subscribed
+  to `level2_batch` as well, in a subscription of its own: the whole book
+  as a `snapshot`, then every `l2update` (each level's new size, `"0"` a
+  level gone, batched every 50 ms). Each message is kept whole as a raw
+  record and read into no row: the snapshot and its updates rebuild the
+  book at any moment, so they are converted, losing nothing, once the
+  market-data intent places a depth kind. The depth of a busy product is
+  far more than its trades: an admin sizes the raw responses' window for it.
 - **Kept open, with no gap.** A stream that drops, or says nothing for 30
   seconds, is opened again after a wait doubling from one second to a
   minute; each time it opens, the trades since the last one recorded are
@@ -128,7 +139,7 @@ Three datasets, declared from code in its catalogue (`declaration.py`):
 ### What it cannot serve
 
 - **What the suite asks and Coinbase never states.** Of the SDK's data
-  suite's 26 cases (contract v22), seven are not presented, each named with
+  suite's 35 cases (contract v26), twelve are not presented, each named with
   why in `tests/venue_cases.py`, as the suite allows of a case about a kind
   of data (`about`) or a field its source never states (`about_field`,
   contract v20): `an-fx-rate` (Coinbase Exchange lists no product
@@ -140,7 +151,9 @@ Three datasets, declared from code in its catalogue (`declaration.py`):
   the taker's; `the-makers-side-inverted` holds it to the other side), and
   contract v22's `reads-a-calendar` and `asks-for-a-settlement-date` (a
   venue trading 24/7: it reads no settlement calendar and never computes a
-  settlement date). The other 19 pass unchanged.
+  settlement date), and contract v23's three outcome cases and v26's two
+  event-group cases (Coinbase Exchange lists no event contract). The other
+  23 pass unchanged, three of them answered by the SDK.
 - **The venue in its catalogue.** The catalogue is declared from code, and
   the venue master's ID for Coinbase Exchange is minted by the platform, so
   `DatasetDeclaration.venue_id` is empty; each row names the venue by the ID
@@ -221,7 +234,9 @@ storage the deployment grants the plugin before anything is read from it,
 with the request that asked for it, its status and freshness headers, and
 when it arrived (`meridian.edge.RawStore`); a live answer is a line of its day's file, added
 only when it changed, and each message of the stream a line of its day's
-file for its type (a heartbeat, which states nothing, is not kept). Each row names its raw record (`RawRecordRef`) and
+file for its type (a heartbeat, which states nothing, is not kept): the
+book's depth among them, `stream/snapshot.jsonl` and `stream/l2update.jsonl`,
+the only place it is kept until a depth kind is placed. Each row names its raw record (`RawRecordRef`) and
 where in it the row came from. Kept in units of a UTC day under
 `responses/`, moved past the window through the SDK.
 
@@ -241,7 +256,8 @@ BTC's live prices kept current until withdrawn, BTC's products streamed --
 the synthetic venue dropping the first connection, the plugin opening it
 again and reading back the trades it missed -- every trade recorded once
 with its aggressor, read over the day and after the reader's watermark and
-heard, and each product's latest quote with its sizes, both read tools
+heard, and each product's latest quote with its sizes, the book's depth
+kept raw, both read tools
 answering what the pages show, and `store lake` numbering each dataset's
 rows with no holes (`e2e/run.py` says each step).
 

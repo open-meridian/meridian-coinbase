@@ -15,7 +15,7 @@ from meridian.roles.data.pairs import Print, Top
 
 from coinbase import convert
 from coinbase.synthetic import Synthetic
-from coinbase.venue import Coinbase
+from coinbase.venue import STREAM, Coinbase
 
 CURRENCIES = {item["id"]: item for item in Synthetic().held["currencies"]}
 
@@ -165,10 +165,33 @@ def test_the_streams_match_and_ticker_are_read_and_kept_first(tmp_path: Path) ->
     assert sorted(p.stem for p in lines) == ["match", "subscriptions", "ticker"], "no heartbeat"
 
 
-def test_the_subscription_asks_for_trades_the_ticker_and_the_heartbeat(tmp_path: Path) -> None:
-    [said] = _market(tmp_path).subscriptions(["BTC-USD", "ETH-USD"])
+def test_the_subscription_asks_for_trades_the_ticker_and_the_heartbeat_then_depth_apart(
+    tmp_path: Path,
+) -> None:
+    said, depth = _market(tmp_path).subscriptions(["BTC-USD", "ETH-USD"])
     assert json.loads(said) == {"type": "subscribe", "product_ids": ["BTC-USD", "ETH-USD"],
                                 "channels": ["matches", "ticker", "heartbeat"]}  # fmt: skip
+    assert json.loads(depth) == {"type": "subscribe", "product_ids": ["BTC-USD", "ETH-USD"],
+                                 "channels": ["level2_batch"]}  # fmt: skip
+
+
+def test_depth_is_kept_raw_whole_and_read_into_no_row(tmp_path: Path) -> None:
+    """Open question 232: the book's snapshot and each update kept exactly as
+    sent, each its own line, and nothing recorded from them."""
+    market = _market(tmp_path)
+    snapshot = ('{"type":"snapshot","product_id":"BTC-USD","bids":[["62000.10","0.84"]],'
+                '"asks":[["62000.12","0.5"]]}')  # fmt: skip
+    update = ('{"type":"l2update","product_id":"BTC-USD","changes":[["buy","62000.10","0"]],'
+              '"time":"2026-10-10T11:00:00.7Z"}')  # fmt: skip
+    assert market.heard(snapshot, 10) == [] and market.heard(update, 11) == []
+    store = market.client.store
+    kept = {p.stem: p for p in tmp_path.rglob("*.jsonl")}
+    assert sorted(kept) == sorted(convert.DEPTH_MESSAGES)
+    for name, text, at in (("snapshot", snapshot, 10), ("l2update", update, 11)):
+        line = store.get(f"{kept[name].relative_to(tmp_path).as_posix()}#0")
+        assert line is not None
+        assert (line["body"], line["call"], line["received_at_ns"]) == (text, "stream", at)
+        assert line["venue"] == "coinbase" and line["request"]["url"] == STREAM
 
 
 def test_trades_are_read_back_a_page_at_a_time_to_the_time_asked(tmp_path: Path) -> None:
