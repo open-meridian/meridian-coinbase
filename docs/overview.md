@@ -39,6 +39,14 @@ It records what readers ask for, not the whole exchange: when a reader asks
 for a price nothing has recorded, the lake asks the plugin, which records it
 or says why it cannot.
 
+## How current it is
+
+Coinbase's live feed is real time, so the plugin declares no delay. The feed
+sends a price only when it changes, and a heartbeat each second. The plugin
+records each sign of life from the feed for the live dataset, so the lake
+knows a best bid and offer that has not changed is still current. A
+heartbeat is never recorded as a price.
+
 ## How it names what it prices
 
 A Coinbase product such as BTC-USD names a market, not an asset. The plugin

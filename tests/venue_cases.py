@@ -150,6 +150,13 @@ TICKER = (
     '"best_ask":"62510.02","best_ask_size":"0.50000000","side":"buy",'
     '"time":"2026-10-10T11:59:58.500000Z","trade_id":8902,"last_size":"0.0125"}'
 )
+#: The stream's heartbeat for BASE's dollar product, stating no price
+#: (contract v27): the stream's sign of life, recorded as the live dataset's
+#: liveness, which confirms every quote in force.
+HEARTBEAT = (
+    '{"type":"heartbeat","last_trade_id":8901,"product_id":"BTC-USD",'
+    '"sequence":200101,"time":"2026-10-10T11:59:59.000000Z"}'
+)
 #: Each case of the suite about trades or quotes, the stream's message that
 #: presents it.
 STREAM_CASES = {"a-trade-recorded": MAKER_SELL, "the-makers-side-inverted": MAKER_SELL,

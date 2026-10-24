@@ -16,9 +16,14 @@ harness's runner (`page --instance reader --level read PATH`):
 
   /resolve                                    the records' IDs, by name;
   /follow?subject=ID...                       hears prices, trades and quotes
-                                              recorded for them;
+                                              recorded for them, and the
+                                              datasets' liveness (contract v27);
   /heard                                      what it heard: each row's dataset,
-                                              row key, version, kind and amount;
+                                              row key, version, kind and amount,
+                                              and each liveness;
+  /datasets                                   the datasets it may read, each
+                                              with its declared delay and the
+                                              liveness the lake holds (v27);
   /prices?subject=ID[&date=D][&kind=K][&dataset=D]
                                               one read: its rows, and what it
                                               left unanswered and why;
@@ -92,6 +97,10 @@ def watermark_json(watermark):
     return [f"{p.partition}|{p.sequence}" for p in watermark.partitions]
 
 
+def liveness_json(item):
+    return {"dataset": item.dataset, "venue_id": item.venue_id, "alive_at_ns": item.alive_at_ns}
+
+
 def price_json(price):
     meta, money = price.meta, as_money(price.price)
     return {
@@ -115,6 +124,7 @@ class Reader:
         self.heard = []
         self.trades = []
         self.quotes = []
+        self.liveness = []
         self.following = None
         self.ids = {}
 
@@ -141,6 +151,9 @@ class Reader:
     async def on_quote(self, heard):
         self.quotes.append(quote_json(heard.message.quote))
 
+    async def on_liveness(self, heard):
+        self.liveness.append(liveness_json(heard.message.liveness))
+
     async def answer(self, path, query):
         one = lambda name: query.get(name, [""])[0]  # noqa: E731
         if path == "/resolve":
@@ -149,10 +162,17 @@ class Reader:
             if self.following is None:
                 self.following = asyncio.ensure_future(
                     self.plugin.receive(prices_recorded=self.on_price, trades_recorded=self.on_trade,
-                                        quotes_recorded=self.on_quote, subjects=query["subject"]))
+                                        quotes_recorded=self.on_quote,
+                                        liveness_recorded=self.on_liveness, subjects=query["subject"]))
             return {"following": query["subject"]}
         if path == "/heard":
-            return {"heard": self.heard, "trades": self.trades, "quotes": self.quotes}
+            return {"heard": self.heard, "trades": self.trades, "quotes": self.quotes,
+                    "liveness": self.liveness}
+        if path == "/datasets":
+            answer = await self.plugin.list_datasets()
+            return {"datasets": [{"dataset": d.dataset, "declared_delay_ns": d.declared_delay_ns,
+                                  "liveness": [liveness_json(item) for item in d.liveness]}
+                                 for d in answer.datasets]}
         if path == "/trades":
             asked = {"subjects": [ops.SubjectRef(entity_id=s) for s in query["subject"]]}
             if query.get("after"):
