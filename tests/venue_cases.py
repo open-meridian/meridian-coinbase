@@ -157,10 +157,34 @@ HEARTBEAT = (
     '{"type":"heartbeat","last_trade_id":8901,"product_id":"BTC-USD",'
     '"sequence":200101,"time":"2026-10-10T11:59:59.000000Z"}'
 )
-#: Each case of the suite about trades or quotes, the stream's message that
-#: presents it.
+
+
+def _ticker(sequence: int, bid: str = "62510.00", ask: str = "62510.02") -> str:
+    """BASE's dollar ticker as TICKER states it, at another sequence number
+    or with other best prices."""
+    return (
+        TICKER.replace('"sequence":200103', f'"sequence":{sequence}')
+        .replace('"best_bid":"62510.00"', f'"best_bid":"{bid}"')
+        .replace('"best_ask":"62510.02"', f'"best_ask":"{ask}"')
+    )
+
+
+#: Contract v28's crossed quote (ruling 424): BASE's dollar ticker with its
+#: best bid above its best offer, recorded invalid by the edge.
+CROSSED_TICKER = _ticker(200103, bid="62510.05", ask="62510.02")
+#: Each case of the suite about trades or quotes, the stream's message (or
+#: messages) that present it.
 STREAM_CASES = {"a-trade-recorded": MAKER_SELL, "the-makers-side-inverted": MAKER_SELL,
-                "a-standing-want-streamed": MAKER_SELL, "a-quote-recorded": TICKER}  # fmt: skip
+                "a-standing-want-streamed": MAKER_SELL, "a-quote-recorded": TICKER,
+                "a-crossed-quote-is-recorded-invalid": CROSSED_TICKER}  # fmt: skip
+#: Why a ticker states no sequence number to the edge (contract v28): Coinbase
+#: numbers each product's messages on a sequence of its own, and the edge's
+#: checks follow one sequence per dataset, so products interleaved on one
+#: connection would read as gaps.
+PER_PRODUCT = (
+    "Coinbase numbers each product's messages on a sequence of its own; the edge's checks "
+    "follow one sequence per dataset, so the plugin states none and judges no quote by it"
+)
 #: Why each case Coinbase never presents is not (meridian.suites: a case about
 #: a kind of data, `about`, the plugin never publishes).
 NOT_PRESENTED = {
@@ -182,6 +206,12 @@ NOT_PRESENTED = {
     "reports-a-flag-the-venue-does-not-state": (
         "Coinbase Exchange lists no event contract: no event whose flags go unstated"
     ),
+    # Contract v28 (about quotes, ruling 602), named through a table: meridian
+    # 0.1.52's check holds contract v27's suites.
+    **{
+        case: PER_PRODUCT
+        for case in ("a-duplicate-is-recorded-suspicious", "rows-after-a-gap-are-suspicious")
+    },
 }
 #: A restart's gap (contract v20): the last trade the lake holds of BASE's
 #: dollar product, by its product, trade ID and time; and the trades the
